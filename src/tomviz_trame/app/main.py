@@ -1,8 +1,8 @@
-from .core import MyTrameApp
+from .core import Tomviz
 
 
 def main(server=None, **kwargs):
-    app = MyTrameApp(server)
+    app = Tomviz(server)
     app.server.start(**kwargs)
 
 

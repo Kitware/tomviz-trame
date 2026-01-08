@@ -9,6 +9,7 @@ dependencies = [
     "trame>=3.12",
     "trame-vuetify",
     "trame-vtk",
+    "trame-dataclass",
 ]
 requires-python = ">=3.9"
 readme = "README.rst"
@@ -45,8 +46,7 @@ build-backend = "hatchling.build"
 [tool.hatch.build]
 include = [
   "/src/tomviz_trame/**/*.py",
-  "/src/tomviz_trame/**/*.js",
-  "/src/tomviz_trame/**/*.css",
+  "/src/tomviz_trame/app/assets/**/*",
 ]
 
 [tool.hatch.build.targets.wheel]
