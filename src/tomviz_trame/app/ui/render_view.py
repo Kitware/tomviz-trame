@@ -3,8 +3,28 @@ from trame.widgets import paraview as pvw
 from trame.widgets import vuetify3 as v3
 from trame_dataclass.core import StateDataModel, watch
 
+VIEW_COLORS = [
+    "#2196F3",  # blue
+    "#4CAF50",  # green
+    "#009688",  # teal
+    "#FF9800",  # orange
+]
+
+
+def color_generator():
+    while True:
+        yield from VIEW_COLORS
+
+
+COLOR_GENERTOR = color_generator()
+
+
+def next_color():
+    return next(COLOR_GENERTOR)
+
 
 class WindowInternalState(StateDataModel):
+    color: str
     interactive_3d: bool = True
     expanded: bool = False
     orientation_axes_visibility: bool = True
@@ -46,20 +66,45 @@ class WindowInternalState(StateDataModel):
         pv_view.CenterAxesVisibility = int(center_axes_visibility)
         widget_view.update()
 
+    def render(self):
+        view = getattr(self, "widget_view", None)
+        if view is None:
+            return
+        view.update()
+
+    def reset_camera(self):
+        view = getattr(self, "widget_view", None)
+        if view is None:
+            return
+        view.reset_camera()
+
 
 class RenderWindow(v3.VCard):
     def __init__(self, **kwargs):
-        super().__init__(tile=True, classes="w-100 h-100 position-relative", **kwargs)
+        super().__init__(
+            tile=True,
+            classes="w-100 h-100 position-relative pl-1",
+            **kwargs,
+        )
         self.pv_view = simple.CreateRenderView()
         self.pv_view.GetRenderWindow().SetOffScreenRendering(True)
-        self.local_state = WindowInternalState(self.server)
+        self.local_state = WindowInternalState(self.server, color=next_color())
+        self.style = f"background: {self.local_state.color};"
+
+        # Make new view active by default
+        self.state.active_view_id = self.local_state._id
 
         with self:
-            self.window = pvw.VtkRemoteView(self.pv_view, interactive_ratio=1)
             with self.local_state.provide_as("rw_data"):
+                self.window = pvw.VtkRemoteView(
+                    self.pv_view,
+                    interactive_ratio=1,
+                    interactor_events=("['EndAnimation', 'LeftButtonPress']",),
+                    LeftButtonPress="active_view_id = rw_data._id",
+                )
                 with v3.VCard(
                     style=(
-                        "`right:1rem;top:1rem;z-index:1;width:${rw_data.expanded ? '4.5' : '2.25'}rem;`",
+                        "`right:1rem;top:1rem;z-index:1;width:${rw_data.expanded ? '4.5' : '2.25'}rem;background:${rw_data.color}`",
                     ),
                     classes="position-absolute",
                     rounded="lg",

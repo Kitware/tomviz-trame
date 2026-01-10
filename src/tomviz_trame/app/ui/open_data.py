@@ -324,4 +324,4 @@ class FileLoader(v3.VDialog):
     def open_dataset(self, entry):
         self.state.tomviz_file_loader = False
         file_to_load = self._file_browser.to_file(entry)
-        self.ctx.tomviz.open_file(file_to_load)
+        self.ctx.pipeline.load_file(file_to_load)
