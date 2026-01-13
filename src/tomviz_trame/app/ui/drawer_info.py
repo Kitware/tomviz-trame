@@ -21,6 +21,6 @@ class DataInformationSection(html.Div):
                 client.ServerTemplate(
                     name="data_info",
                     v_if=("active_data_id", None),
-                    v_show=("show_informations", False),
+                    v_show=("show_informations", True),
                     classes="mb-2",
                 )

@@ -1,4 +1,4 @@
-from trame.widgets import client, html
+from trame.widgets import client, dataclass, html
 from trame.widgets import vuetify3 as v3
 
 
@@ -7,7 +7,7 @@ class PropertiesSections(html.Div):
         super().__init__()
 
         with self:
-            v3.VBtn(
+            with v3.VBtn(
                 prepend_icon=(
                     "show_properties ? 'mdi-chevron-down' : 'mdi-chevron-up'",
                 ),
@@ -16,7 +16,13 @@ class PropertiesSections(html.Div):
                 classes="w-100 text-none mb-1",
                 variant="tonal",
                 spaced="end",
-            )
+            ):
+                with v3.Template(v_slot_append=True):
+                    with dataclass.Provider(
+                        name="rep", instance=("active_representation_id",)
+                    ):
+                        with dataclass.Provider(name="view", instance=("rep.View",)):
+                            v3.VIcon("mdi-stop", color=("view.color",))
             with v3.VExpandTransition():
                 # with v3.VCard(
                 #     classes="border-thin overflow-auto flex-fill mb-2",
@@ -29,5 +35,5 @@ class PropertiesSections(html.Div):
                 ):
                     client.ServerTemplate(
                         name=("tpl",),
-                        v_show=("show_properties", False),
+                        v_show=("show_properties", True),
                     )

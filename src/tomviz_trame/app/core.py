@@ -1,6 +1,8 @@
 from trame.app import TrameApp
+from trame.decorators import life_cycle
 from trame.ui.vuetify3 import VAppLayout
-from trame.widgets import html
+from trame.widgets import dockview, html
+from trame.widgets import paraview as pvw
 from trame.widgets import vuetify3 as v3
 
 from tomviz_trame.app import cli, module, ui
@@ -29,6 +31,10 @@ class Tomviz(TrameApp):
         # build ui
         self._build_ui()
 
+    @life_cycle.client_connected
+    def on_client_connected(self, **_):
+        self.ctx.pipeline.refresh_views()
+
     def _build_ui(self, **_):
         self.state.trame__title = "tomviz"
         self.state.trame__favicon = f"{module.BASENAME}/assets/tomviz/favicon.png"
@@ -38,6 +44,7 @@ class Tomviz(TrameApp):
 
         # Create UI for all representation types
         ui.initialize_dynamic_ui(self.server)
+        pvw.initialize(self.server)
 
         with VAppLayout(
             self.server,
@@ -49,7 +56,7 @@ class Tomviz(TrameApp):
                     icon="mdi-refresh",
                     classes="position-absolute rounded",
                     density="comfortable",
-                    style="right:1rem;bottom:1rem;z-index:1;",
+                    style="right:1rem;bottom:1rem;z-index:10;",
                     click=self.server.controller.on_server_reload,
                 )
 
@@ -78,8 +85,12 @@ class Tomviz(TrameApp):
 
             # Main content
             with v3.VMain():
-                with v3.VRow(no_gutter=True, classes="pa-0 ma-0 h-100"):
-                    with v3.VCol(classes="pa-0"):
-                        ui.RenderWindow()
-                    with v3.VCol(classes="pa-0"):
-                        ui.RenderWindow()
+                dockview.DockView(
+                    ctx_name="dock_view",
+                    theme=("theme === 'light' ? 'Light' : 'Dark'",),
+                    active_panel=(self.ctx.pipeline.activate_panel, "[$event]"),
+                )
+
+                # Add a view if none defined
+                if not self.ctx.pipeline.views:
+                    self.ctx.pipeline.add_view()

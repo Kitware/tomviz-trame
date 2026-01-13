@@ -9,6 +9,10 @@ BASENAME = f"__trame_tomviz_{__version__}"
 serve = {
     BASENAME: serve_path,
 }
+scripts = [
+    f"{BASENAME}/dock.js",
+]
 styles = [
     f"{BASENAME}/style.css",
 ]
+vue_use = ["tomviz"]

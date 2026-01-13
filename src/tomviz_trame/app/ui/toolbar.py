@@ -79,5 +79,13 @@ class Toolbar(v3.VAppBar):
                 click="show_settings = true",
             )
 
+            v3.VSpacer()
+
+            ui.toolbar_btn(
+                icon="mdi-plus",
+                v_tooltip_bottom="'Add View'",
+                click=self.ctx.pipeline.add_view,
+            )
+
     def fake_busy(self):
         time.sleep(2)

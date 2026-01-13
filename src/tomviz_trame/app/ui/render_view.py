@@ -1,4 +1,5 @@
 from paraview import simple
+from trame.ui.html import DivLayout
 from trame.widgets import paraview as pvw
 from trame.widgets import vuetify3 as v3
 from trame_dataclass.core import StateDataModel, watch
@@ -6,8 +7,10 @@ from trame_dataclass.core import StateDataModel, watch
 VIEW_COLORS = [
     "#2196F3",  # blue
     "#4CAF50",  # green
-    "#009688",  # teal
+    # "#009688",  # teal
     "#FF9800",  # orange
+    "#FFEB3B",  # yellow
+    "#607D8B",  # blue-gray
 ]
 
 
@@ -79,22 +82,25 @@ class WindowInternalState(StateDataModel):
         view.reset_camera()
 
 
-class RenderWindow(v3.VCard):
-    def __init__(self, **kwargs):
-        super().__init__(
-            tile=True,
-            classes="w-100 h-100 position-relative pl-1",
-            **kwargs,
-        )
+class RenderWindow(DivLayout):
+    def __init__(self, server, **kwargs):
         self.pv_view = simple.CreateRenderView()
         self.pv_view.GetRenderWindow().SetOffScreenRendering(True)
+        super().__init__(
+            server, template_name=f"view_{self.pv_view.GetGlobalIDAsString()}"
+        )
         self.local_state = WindowInternalState(self.server, color=next_color())
         self.style = f"background: {self.local_state.color};"
 
         # Make new view active by default
         self.state.active_view_id = self.local_state._id
 
-        with self:
+        self.root.classes = "h-100"
+
+        with (
+            self,
+            v3.VCard(tile=True, classes="w-100 h-100 position-relative", **kwargs),
+        ):
             with self.local_state.provide_as("rw_data"):
                 self.window = pvw.VtkRemoteView(
                     self.pv_view,
@@ -104,7 +110,7 @@ class RenderWindow(v3.VCard):
                 )
                 with v3.VCard(
                     style=(
-                        "`right:1rem;top:1rem;z-index:1;width:${rw_data.expanded ? '4.5' : '2.25'}rem;background:${rw_data.color}`",
+                        "`right:1rem;top:1rem;z-index:1;width:${rw_data.expanded ? '4.5' : '2.25'}rem;`",  # background:${rw_data.color}
                     ),
                     classes="position-absolute",
                     rounded="lg",
@@ -221,3 +227,11 @@ class RenderWindow(v3.VCard):
     def reset_camera_orientation(self, action):
         getattr(self.pv_view, action)()
         self.reset_camera()
+
+    @property
+    def tpl_name(self):
+        return f"view_{self.pv_id}"
+
+    @property
+    def pv_id(self):
+        return self.pv_view.GetGlobalIDAsString()

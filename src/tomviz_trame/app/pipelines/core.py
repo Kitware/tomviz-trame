@@ -1,12 +1,14 @@
+import asyncio
 from enum import Enum
 from pathlib import Path
 
 from loguru import logger
 from paraview import servermanager, simple
 from trame.app import TrameComponent
+from trame.decorators import trigger
 from trame_dataclass.core import StateDataModel, get_instance
 
-from tomviz_trame.app.module import BASENAME
+from tomviz_trame.app import module, ui
 from tomviz_trame.app.ui.dynamic import DYNAMIC_TEMPLATES
 
 
@@ -82,13 +84,15 @@ class RepresentationType(Enum):
 
     @property
     def icon(self):
-        return f"{BASENAME}/assets/representations/{self.value}"
+        return f"{module.BASENAME}/assets/representations/{self.value}"
 
 
 class PipelineManager(TrameComponent):
     def __init__(self, server=None):
         super().__init__(server=server)
         self.representations = {}  # { view_id: [rep, ...] }
+        self.views = {}
+        self.pending_tasks = set()
         self.pxm = servermanager.ProxyManager()
         self.tree = Pipeline(self.server)
         self.state.property_templates = []
@@ -97,6 +101,9 @@ class PipelineManager(TrameComponent):
         self.state.active_representation_id = None
 
         self.tree.watch(["active_node"], self._on_active_change)
+
+        if self.server.hot_reload:
+            self.server.controller.on_server_reload.add(self.refresh_views_later)
 
     def __del__(self):
         self.tree.clear_watchers()
@@ -127,9 +134,65 @@ class PipelineManager(TrameComponent):
 
         return dataset._id
 
-    def add_view(self) -> str: ...
+    def add_view(self) -> str:
+        view = ui.RenderWindow(self.server)
+        self.views[view.local_state._id] = view
+        self.ctx.dock_view.add_panel(
+            view.pv_id,
+            "3D View",
+            view.tpl_name,
+            tabComponent="tomviz-dockview-tab",
+            params={
+                "templateName": view.tpl_name,
+                "viewState": view.local_state._id,
+            },
+        )
+        return view.local_state._id
 
-    def remove_view(self, view_id: str): ...
+    @trigger("remove_view")
+    def remove_view(self, view_id: str):
+        logger.debug("remove view {}", view_id)
+        # FIXME need more
+        # - remove representations of view
+        # - remove view in self.views
+        view = self.views.get(view_id)
+        if view:
+            self.ctx.dock_view.remove_panel(view.pv_id)
+            self.state.active_view_id = None
+
+    def activate_panel(self, panel_id):
+        logger.debug("activate_panel {}", panel_id)
+        found = False
+        for view_id, view in self.views.items():
+            if view.pv_id == panel_id:
+                self.state.active_view_id = view_id
+                found = True
+
+        if not found:
+            self.state.active_view_id = None
+
+    def refresh_views_later(self, **_):
+        task = asyncio.create_task(self._refresh_views())
+        self.pending_tasks.add(task)
+        task.add_done_callback(self.pending_tasks.discard)
+
+    async def _refresh_views(self):
+        await asyncio.sleep(0.1)
+        self.refresh_views()
+
+    def refresh_views(self, **_):
+        """Register all views into dockview"""
+        for view in self.views.values():
+            self.ctx.dock_view.add_panel(
+                view.pv_id,
+                "3D View",
+                view.tpl_name,
+                tabComponent="tomviz-dockview-tab",
+                params={
+                    "templateName": view.tpl_name,
+                    "viewState": view.local_state._id,
+                },
+            )
 
     def add_default_representations(self, data_id: str, view_id: str):
         self.add_representation(data_id, view_id, RepresentationType.OUTLINE.name)

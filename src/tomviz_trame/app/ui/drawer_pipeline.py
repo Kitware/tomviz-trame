@@ -7,14 +7,19 @@ class PipelineSection(html.Div):
         super().__init__()
 
         with self:
-            v3.VBtn(
+            with v3.VBtn(
                 prepend_icon=("show_pipeline ? 'mdi-chevron-down' : 'mdi-chevron-up'",),
                 text="Pipelines",
                 click="show_pipeline = !show_pipeline",
                 classes="w-100 text-none mb-1",
                 variant="tonal",
                 spaced="end",
-            )
+            ):
+                with v3.Template(v_slot_append=True):
+                    with dataclass.Provider(
+                        "active_view", instance=("active_view_id",)
+                    ):
+                        v3.VIcon("mdi-stop", color=("active_view.color",))
             with v3.VExpandTransition():
                 with v3.VCard(
                     classes="border-thin overflow-auto flex-fill mb-2",
