@@ -73,4 +73,5 @@ class Operators(TrameComponent):
 
     def update(self): ...
 
-    def get_operator(self, name): ...
+    def get_operator(self, name):
+        """https://github.com/OpenChemistry/tomviz/blob/7d43eca7189d8df96e00c389de15b7d39cc674ed/tests/python/utils.py#L15"""

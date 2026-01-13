@@ -1,0 +1,11 @@
+.pipeline {
+  --v-list-prepend-gap: 0px;
+}
+
+.representation {
+  --v-list-prepend-gap: 8px;
+}
+
+.no-select {
+  user-select: none;
+}
