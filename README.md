@@ -2,7 +2,7 @@
 
 ParaView and Trame based tomviz
 
-![Application](https://raw.githubusercontent.com/Kitware/tomviz-trame/master/tomviz.png)
+![Application](https://raw.githubusercontent.com/Kitware/tomviz-trame/main/tomviz.png)
 
 ## License
 
