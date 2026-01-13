@@ -1,7 +1,7 @@
 from loguru import logger
 from paraview import servermanager, simple
 from trame_client.widgets.core import TrameComponent
-from trame_dataclass.core import StateDataModel, get_instance, watch
+from trame_dataclass.core import StateDataModel, field, get_instance, watch
 
 from .core import RepresentationType, extract_arrays
 
@@ -18,9 +18,15 @@ class SliceProperties(StateDataModel):
     SliceMax: int
     SliceDirection: str = "XY Plane"
     SliceDirections: tuple[str, str, str] = ("YZ Plane", "XZ Plane", "XY Plane")
-    ColorArrayName: str
     ArrayNames: list[str]
-    ColorPreset: str = "Fast"
+
+    # color-by panel
+    color_preset_inverted: bool
+    color_by: str | None
+    color_range: tuple[float, float] = field(default=(0, 1000))
+    color_range_bounds: tuple[float, float, float] = field(default=(0, 1000, 1))
+    color_preset: str = "Fast"
+    solid_color: int  # index in palette
 
     def pull(self):
         proxy = getattr(self, "proxy", None)
@@ -48,10 +54,11 @@ class SliceProperties(StateDataModel):
         self.Visibility = bool(proxy.Visibility)
         self.Slice = proxy.Slice
         self.SliceDirection = proxy.SliceDirection
-        self.ColorArrayName = proxy.ColorArrayName[1]
+        self.color_by = proxy.ColorArrayName[1]
 
         # Update max slice
         self._on_direction_change(self.SliceDirection)
+        self.reset_color_range()
 
     def push(self):
         proxy = getattr(self, "proxy", None)
@@ -77,16 +84,28 @@ class SliceProperties(StateDataModel):
         self.push()
         self.render()
 
-    @watch("ColorArrayName", "ColorPreset")
-    def _on_color_change(self, array_name, preset):
+    @watch(
+        "color_by",
+        "color_range",
+        "color_preset",
+        "color_preset_inverted",
+    )
+    def _on_color_change(self, color_by, color_range, color_preset, invert):
         proxy = getattr(self, "proxy", None)
         if proxy is None:
             return
 
-        lut = simple.GetColorTransferFunction(array_name)
-        simple.AssignFieldToColorPreset(array_name, preset)
-        proxy.ColorArrayName = ("POINTS", array_name)  # FIXME points/cells?
-        proxy.LookupTable = lut
+        if color_by:
+            lut = simple.GetColorTransferFunction(color_by)
+            simple.AssignFieldToColorPreset(color_by, color_preset)
+            if invert:
+                lut.InvertTransferFunction()
+
+            lut.RescaleTransferFunction(*color_range)
+            proxy.ColorArrayName = ("POINTS", color_by)
+            proxy.LookupTable = lut
+        else:
+            logger.error("slice rep must be colored by array")
 
         self.render()
 
@@ -104,6 +123,22 @@ class SliceProperties(StateDataModel):
 
     def reset_camera(self):
         get_instance(self.View).render()
+
+    def reset_color_range(self):
+        proxy = getattr(self, "proxy", None)
+        if proxy is None:
+            return
+
+        # Update data related info
+        source_proxy = proxy.Input
+        array = source_proxy.GetPointDataInformation().GetArray(self.color_by)
+        self.color_range = array.GetRange()
+        self.use_color_range_as_bounds()
+
+    def use_color_range_as_bounds(self):
+        v_min, v_max = self.color_range
+        step = (v_max - v_min) / 255
+        self.color_range_bounds = (v_min, v_max, step)
 
 
 class SliceRepresentation(TrameComponent):

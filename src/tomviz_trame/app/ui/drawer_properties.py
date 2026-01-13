@@ -24,11 +24,6 @@ class PropertiesSections(html.Div):
                         with dataclass.Provider(name="view", instance=("rep.View",)):
                             v3.VIcon("mdi-stop", color=("view.color",))
             with v3.VExpandTransition():
-                # with v3.VCard(
-                #     classes="border-thin overflow-auto flex-fill mb-2",
-                #     flat=True,
-                #     variant="flat",
-                # ):
                 with v3.Template(
                     v_for="tpl in property_templates",
                     key="tpl",

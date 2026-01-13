@@ -279,3 +279,9 @@ class PipelineManager(TrameComponent):
                 s.active_representation_id = None
                 s.active_view_id = None
                 s.property_templates = []
+
+    def reset_color_range(self, rep_id):
+        get_instance(rep_id).reset_color_range()
+
+    def use_color_range_as_bounds(self, rep_id):
+        get_instance(rep_id).use_color_range_as_bounds()

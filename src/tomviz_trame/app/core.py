@@ -8,6 +8,7 @@ from trame.widgets import vuetify3 as v3
 from tomviz_trame.app import cli, module, ui
 from tomviz_trame.app.operators import Operators
 from tomviz_trame.app.pipelines import PipelineManager
+from tomviz_trame.app.ui.colormaps import generate_colormaps
 
 
 class Tomviz(TrameApp):
@@ -18,6 +19,7 @@ class Tomviz(TrameApp):
 
         # Global helper
         self.ctx.pipeline = PipelineManager(server=self.server)
+        self.ctx.colormaps = generate_colormaps(self.server)
         self.ctx.operators = Operators(
             server=self.server,
             config_file=args.operators,

@@ -18,3 +18,20 @@ window.tomviz = {
     });
   },
 };
+
+function capitalize(string) {
+  if (!string) return "";
+  return string.charAt(0).toUpperCase() + string.slice(1);
+}
+
+function enableSolidColor(array_names) {
+  return [
+    { title: "Solid Color", value: null },
+    ...array_names.map((value) => ({ title: capitalize(value), value })),
+  ];
+}
+
+window.trame.utils.tomviz = {
+  capitalize,
+  enableSolidColor,
+};
