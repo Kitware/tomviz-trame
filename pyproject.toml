@@ -14,7 +14,7 @@ dependencies = [
     "loguru",
 ]
 requires-python = ">=3.9"
-readme = "README.rst"
+readme = "README.md"
 license = {text = "Apache Software License"}
 keywords = ["Python", "Interactive", "Web", "Application", "Framework"]
 classifiers = [
