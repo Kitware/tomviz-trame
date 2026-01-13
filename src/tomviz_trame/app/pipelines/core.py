@@ -86,6 +86,24 @@ class RepresentationType(Enum):
     def icon(self):
         return f"{module.BASENAME}/assets/representations/{self.value}"
 
+    def create_representation(self, pipeline_manager, proxy_info, view_info):
+        if self is RepresentationType.SLICE:
+            from .slice import SliceRepresentation
+
+            return SliceRepresentation(pipeline_manager, proxy_info, view_info)
+
+        if self is RepresentationType.OUTLINE:
+            from .outline import OutlineRepresentation
+
+            return OutlineRepresentation(pipeline_manager, proxy_info, view_info)
+
+        if self is RepresentationType.VOLUME:
+            from .volume import VolumeRepresentation
+
+            return VolumeRepresentation(pipeline_manager, proxy_info, view_info)
+
+        return None
+
 
 class PipelineManager(TrameComponent):
     def __init__(self, server=None):
@@ -218,28 +236,10 @@ class PipelineManager(TrameComponent):
             data_obj.representations[view_id] = []
 
         new_reps = {**data_obj.representations}
-
-        if type == RepresentationType.SLICE.name:
-            from .slice import SliceRepresentation
-
-            rep = SliceRepresentation(
-                self, (data_id, data_proxy), (view_id, view_proxy)
-            )
-            self.representations.setdefault(view_id, []).append(rep)
-            new_reps[view_id] = [
-                *new_reps[view_id],
-                rep.props._id,
-            ]
-            data_obj.representations = new_reps
-
-            return rep.props._id
-
-        if type == RepresentationType.OUTLINE.name:
-            from .outline import OutlineRepresentation
-
-            rep = OutlineRepresentation(
-                self, (data_id, data_proxy), (view_id, view_proxy)
-            )
+        rep = RepresentationType[type].create_representation(
+            self, (data_id, data_proxy), (view_id, view_proxy)
+        )
+        if rep:
             self.representations.setdefault(view_id, []).append(rep)
             new_reps[view_id] = [
                 *new_reps[view_id],

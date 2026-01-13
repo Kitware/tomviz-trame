@@ -18,11 +18,11 @@ class SliceProperties(StateDataModel):
     SliceMax: int
     SliceDirection: str = "XY Plane"
     SliceDirections: tuple[str, str, str] = ("YZ Plane", "XZ Plane", "XY Plane")
-    ArrayNames: list[str]
 
     # color-by panel
     color_preset_inverted: bool
     color_by: str | None
+    array_names: list[str]
     color_range: tuple[float, float] = field(default=(0, 1000))
     color_range_bounds: tuple[float, float, float] = field(default=(0, 1000, 1))
     color_preset: str = "Fast"
@@ -40,7 +40,7 @@ class SliceProperties(StateDataModel):
         logger.debug("slice input {}", source_proxy)
         logger.debug("slice points info {}", source_proxy.GetPointDataInformation())
 
-        self.ArrayNames = extract_arrays(source_proxy.GetPointDataInformation())
+        self.array_names = extract_arrays(source_proxy.GetPointDataInformation())
         extent = proxy.Input.GetDataInformation().DataInformation.GetExtent()
         self.Dimensions = (
             extent[1] - extent[0],
