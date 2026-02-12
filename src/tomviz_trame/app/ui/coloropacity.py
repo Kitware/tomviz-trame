@@ -15,7 +15,9 @@ class ColorOpacityEditor(html.Div):
                     v_if=colormaps_instance,
                     name="colormaps", instance=(colormaps_instance,)
                 ):
-                    with v3.Template(v_if="coloropacity && colormaps && coloropacity.scaled_colors && coloropacity.scaled_opacities"):
+                    with v3.Template(
+                        v_if="coloropacity && colormaps && coloropacity.scaled_colors && coloropacity.scaled_opacities",
+                    ):
                         color_opacity_editor.ColorOpacityEditor(
                             style="height: 15rem;",
                             v_model_colorNodes=("coloropacity.scaled_colors",),
@@ -36,11 +38,12 @@ class ColorOpacityEditor(html.Div):
                         )
 
                         with v3.Template(v_if="coloropacity.active_data_array"):
+                            v3.VLabel("Color Range [{{ (coloropacity.color_range?.[0] || 0).toFixed(1) }}, {{ (coloropacity.color_range?.[1] || 1).toFixed(1) }}]")
                             v3.VRangeSlider(
                                 v_model="coloropacity.color_range",
-                                min=("coloropacity.color_range_bounds[0]",),
-                                max=("coloropacity.color_range_bounds[1]",),
-                                step=("coloropacity.color_range_bounds[2]",),
+                                min=("coloropacity.data_range[0]",),
+                                max=("coloropacity.data_range[1]",),
+                                step=("coloropacity.data_range[2]",),
                                 density="comfortable",
                                 hide_details=True,
                             )
@@ -48,7 +51,6 @@ class ColorOpacityEditor(html.Div):
                             with html.Div(
                                 classes="d-flex no-select position-relative align-center"
                             ):
-                                v3.VLabel("{{ (coloropacity.color_range?.[0] || 0).toFixed(1) }}")
                                 with v3.VMenu(
                                     location="end",
                                     height="50vh",
@@ -97,12 +99,6 @@ class ColorOpacityEditor(html.Div):
                                                     classes="rounded",
                                                     style="height: 16px;max-width: 100%;",
                                                 )
-                                v3.VLabel("{{ (coloropacity.color_range?.[1] || 1).toFixed(1) }}")
-
-                            with html.Div(classes="d-flex align-center"):
-                                v3.VLabel("Color By")
-                                v3.VSpacer()
-
                                 v3.VBtn(
                                     icon=(
                                         "coloropacity.invert_color_preset ? 'mdi-invert-colors' : 'mdi-invert-colors-off'",
@@ -124,59 +120,22 @@ class ColorOpacityEditor(html.Div):
                                     hide_details=True,
                                     variant="plain",
                                     classes="rounded ml-2",
-                                    click=(
-                                        self.ctx.pipeline.use_color_range_as_bounds,
-                                        "[coloropacity._id]",
-                                    ),
+                                    click="coloropacity.color_range = [coloropacity.data_range[0], coloropacity.data_range[1]]",
                                     disabled=("!coloropacity.active_data_array",),
-                                    v_tooltip_top="'Use color range as slider bounds'",
-                                )
-                                v3.VBtn(
-                                    icon="mdi-magnify-minus-outline",
-                                    density="compact",
-                                    size="small",
-                                    hide_details=True,
-                                    variant="plain",
-                                    classes="rounded ml-2",
-                                    click="coloropacity.color_range=[coloropacity.color_range[0]*2, coloropacity.color_range[1]*2]",
-                                    disabled=("!coloropacity.active_data_array",),
-                                    v_tooltip_top="'Increase color range by 2 on each bound'",
-                                )
-                                v3.VBtn(
-                                    icon="mdi-magnify-plus-outline",
-                                    density="compact",
-                                    size="small",
-                                    hide_details=True,
-                                    variant="plain",
-                                    classes="rounded ml-2",
-                                    click="coloropacity.color_range=[coloropacity.color_range[0]/2, coloropacity.color_range[1]/2]",
-                                    disabled=("!coloropacity.active_data_array",),
-                                    v_tooltip_top="'Reduce color range by 2 on each bound'",
-                                )
-                                v3.VBtn(
-                                    icon="mdi-database-refresh",
-                                    density="compact",
-                                    size="small",
-                                    hide_details=True,
-                                    variant="plain",
-                                    classes="rounded ml-2",
-                                    click=(
-                                        self.ctx.pipeline.reset_color_range,
-                                        "[coloropacity._id]",
-                                    ),
-                                    disabled=("!coloropacity.active_data_array",),
-                                    v_tooltip_top="'Reset slider to full data range'",
+                                    v_tooltip_top="'Reset color range to the full data range'",
                                 )
 
-                            v3.VSelect(
-                                v_model="coloropacity.active_data_array",
-                                items=("coloropacity.data_arrays",),
-                                variant="solo-filled",
-                                flat=True,
-                                density="compact",
-                                hide_details=True,
-                                classes="my-1",
-                            )
+                            with html.Div(classes="d-flex align-center"):
+                                v3.VSelect(
+                                    label="Color By",
+                                    v_model="coloropacity.active_data_array",
+                                    items=("coloropacity.data_arrays",),
+                                    variant="solo-filled",
+                                    flat=True,
+                                    density="compact",
+                                    hide_details=True,
+                                    classes="my-1 mt-2",
+                                )
 
                         with v3.VItemGroup(
                             v_else=True,

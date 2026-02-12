@@ -21,8 +21,7 @@ class ColorOpacitySection(html.Div):
 
             with v3.VExpandTransition():
                 with v3.VCard(
-                    # classes="border-thin overflow-auto flex-fill mb-2",
-                    classes="border-thin overflow-auto flex-fill ma-2 mb-2",
+                    classes="border-thin overflow-hidden flex-fill pa-2 mb-2",
                     flat=True,
                     variant="flat",
                     v_show=("show_coloropacity && active_coloropacity_id",),

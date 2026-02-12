@@ -19,9 +19,8 @@ class ColorOpacity(StateDataModel):
     data_arrays: list[str]
     active_data_array: str
 
-    data_range: tuple[float, float] = field(default=(0, 1000))
-    color_range: tuple[float, float] = field(default=(0, 1000))
-    color_range_bounds: tuple[float, float, float] = field(default=(0, 1000, 1))
+    data_range: tuple[float, float, float] = field(default=(0, 255, 1))
+    color_range: tuple[float, float] = field(default=(0, 255))
 
     active_color_preset: str = "Fast"
     invert_color_preset: bool = False
@@ -43,19 +42,27 @@ class ColorOpacity(StateDataModel):
         self.ctx = ColorOpacityContext()
 
     @watch(
+        "color_range",
         "active_color_preset",
         "invert_color_preset",
     )
-    def _on_color_preset_change(self, active_color_preset, invert_color_preset):
+    def _on_color_preset_change(self, color_range, active_color_preset, invert_color_preset):
         if self.server is None:
             return
 
         colors: list[Color] = self.server.context.colormaps.presets[active_color_preset].colors
 
+        data_range = (self.data_range[0], self.data_range[1])
+        data_delta = data_range[1] - data_range[0]
+        scaled_color_range = (
+            (color_range[0] - data_range[0]) / data_delta,
+            (color_range[1] - data_range[0]) / data_delta,
+        )
+
         if invert_color_preset:
-            color_nodes = make_linear_nodes(colors[::-1], (0, 1))
+            color_nodes = make_linear_nodes(colors[::-1], scaled_color_range)
         else:
-            color_nodes = make_linear_nodes(colors, (0, 1))
+            color_nodes = make_linear_nodes(colors, scaled_color_range)
 
         self.scaled_colors = color_nodes
 
@@ -63,19 +70,15 @@ class ColorOpacity(StateDataModel):
             self.ctx.lut.ApplyPreset(active_color_preset)
             if invert_color_preset:
                 self.ctx.lut.InvertTransferFunction()
-   
-    @watch("color_range")
-    def _on_color_range_change(self, *args):
-        if self.ctx.lut:
-            self.ctx.lut.RescaleTransferFunction(*self.color_range)
+            self.ctx.lut.RescaleTransferFunction(*color_range)
 
     @watch("active_data_array")
     def _on_active_data_array_change(self, *arg):
         self.reset_color_range()
 
-    @watch("scaled_opacities", "color_range")
+    @watch("scaled_opacities", "data_range")
     def _on_scaled_opacities_change(self, *args):
-        opacities = rescale_nodes(self.scaled_opacities, self.color_range)
+        opacities = rescale_nodes(self.scaled_opacities, (self.data_range[0], self.data_range[1]))
 
         if self.ctx.pwf:
             pwf_points = []
@@ -131,15 +134,11 @@ class ColorOpacity(StateDataModel):
 
         # Update data related info
         array = pv_source_proxy.GetPointDataInformation().GetArray(self.active_data_array)
-        self.data_range = array.GetRange()
+        data_range = array.GetRange()
+        v_min, v_max = data_range
+        step = max((v_max - v_min) / 255, 1)
+        self.data_range = (v_min, v_max, step)
         self.color_range = (self.data_range[0], self.data_range[1])
-        self.use_color_range_as_bounds()
-
-    def use_color_range_as_bounds(self):
-        v_min, v_max = self.color_range
-        step = (v_max - v_min) / 255
-        self.color_range_bounds = (v_min, v_max, step)
-
 
 def create_default_coloropacity(source: SourceProxy) -> ColorOpacity:
     coloropacity = ColorOpacity(source.server)
