@@ -1,18 +1,22 @@
-from loguru import logger
-from paraview import servermanager, simple
+from paraview import servermanager
 from trame_client.widgets.core import TrameComponent
-from trame_dataclass.core import StateDataModel, field, get_instance, watch
+from trame_dataclass.core import StateDataModel, get_instance, watch
 
-from .core import RepresentationType, extract_arrays
+from tomviz_trame.app.pipelines.core import RepresentationProperties, RepresentationPropertiesContext, RepresentationType
+from tomviz_trame.app.pipelines.source import SourceProxy
+from tomviz_trame.app.pipelines.coloropacity import ColorOpacity, create_default_coloropacity
 
 
-class VolumeProperties(StateDataModel):
+class VolumeProperties(RepresentationProperties, StateDataModel):
     Input: str  # id of SourceProxy
     Label: str
     Type: str
     Icon: str
     Visibility: bool
     View: str
+
+    ColorOpacityId: str # id of the active coloropacity for this representation
+    CustomColoropacity: bool # use this representation's coloropacity or the source's coloropacity
 
     # Volume rep specific
     InterpolationType: str  # Nearest, Linear, Cubic
@@ -21,24 +25,16 @@ class VolumeProperties(StateDataModel):
     VolumetricScatteringBlending: float = 0  # [0-2]
     VolumeAnisotropy: float = 0  # [-1,1]
 
-    # color-by panel
-    color_preset_inverted: bool
-    color_by: str | None
-    color_range: tuple[float, float] = field(default=(0, 1000))
-    color_range_bounds: tuple[float, float, float] = field(default=(0, 1000, 1))
-    color_preset: str = "Fast"
-    solid_color: int  # index in palette
-    array_names: list[str]
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        self.ctx = RepresentationPropertiesContext()
 
     def pull(self):
-        proxy = getattr(self, "proxy", None)
+        proxy = self.ctx.proxy
+
         if proxy is None:
             return
-
-        # Update data related info
-        source_proxy = proxy.Input
-        source_proxy.UpdatePipeline()
-        self.array_names = extract_arrays(source_proxy.GetPointDataInformation())
 
         # Update representation info
         self.Visibility = bool(proxy.Visibility)
@@ -48,12 +44,9 @@ class VolumeProperties(StateDataModel):
         self.VolumetricScatteringBlending = float(proxy.VolumetricScatteringBlending)
         self.VolumeAnisotropy = float(proxy.VolumeAnisotropy)
 
-        # Update UI
-        self.color_by = proxy.ColorArrayName[1]
-        self.reset_color_range()
-
     def push(self):
-        proxy = getattr(self, "proxy", None)
+        proxy = self.ctx.proxy
+
         if proxy is None:
             return
 
@@ -63,47 +56,68 @@ class VolumeProperties(StateDataModel):
         proxy.VolumetricScatteringBlending = self.VolumetricScatteringBlending
         proxy.VolumeAnisotropy = self.VolumeAnisotropy
 
-    @watch(
-        "color_by",
-        "color_range",
-        "color_preset",
-        "color_preset_inverted",
-    )
-    def _on_color_change(self, color_by, color_range, color_preset, invert):
-        proxy = getattr(self, "proxy", None)
+    @watch("CustomColoropacity")
+    def _on_custom_coloropacity_change(self, custom):
+        # unsubscribe from the current coloropacity
+        if self.ctx.coloropacity_unwatch_0 is not None:
+            self.ctx.coloropacity_unwatch_0()
+            self.ctx.coloropacity_unwatch_0 = None
+
+        if self.ctx.coloropacity_unwatch_1 is not None:
+            self.ctx.coloropacity_unwatch_1()
+            self.ctx.coloropacity_unwatch_1 = None
+
+        coloropacity: ColorOpacity | None
+
+        if custom:
+            coloropacity = self.ctx.coloropacity
+        else:
+            coloropacity = self.ctx.source.ctx.coloropacity
+
+        if coloropacity is None:
+            self.ColorOpacityId = ""
+            return
+
+        active_coloropacity_id = self.server.state.active_coloropacity_id      
+
+        if active_coloropacity_id == self.ColorOpacityId:
+            with self.server.state as s:
+                s.active_coloropacity_id = coloropacity._id
+
+        self.ColorOpacityId = coloropacity._id
+
+        self.ctx.coloropacity_unwatch_0 = coloropacity.watch(["active_data_array"], self.on_coloropacity_active_array_change)
+
+        # can this rerender happen automatically when the lut/pwf is modified?
+        self.ctx.coloropacity_unwatch_1 = coloropacity.watch(["color_range", "opacities", "active_color_preset", "invert_color_preset"], self.render)
+
+        self.on_coloropacity_active_array_change(coloropacity.active_data_array)
+
+        proxy = self.ctx.proxy
+
         if proxy is None:
             return
 
-        if color_by:
-            lut = simple.GetColorTransferFunction(color_by)
-            pwf = simple.GetOpacityTransferFunction(color_by)
-            pwf.Points = [
-                color_range[0],  # scalar
-                0.0,  # opacity
-                0.5,  # bias 1
-                0,  # bias 2
-                color_range[1],  # scalar
-                1.0,  # opacity
-                0.5,  # bias 1
-                0,  # bias 2
-            ]
-
-            simple.AssignFieldToColorPreset(color_by, color_preset)
-            if invert:
-                lut.InvertTransferFunction()
-
-            lut.RescaleTransferFunction(*color_range)
-            proxy.ColorArrayName = ("POINTS", color_by)
-            proxy.LookupTable = lut
-            proxy.ScalarOpacityFunction = pwf
-        else:
-            logger.error("volume rep must be colored by array")
+        proxy.LookupTable = coloropacity.ctx.lut
+        proxy.ScalarOpacityFunction = coloropacity.ctx.pwf
 
         self.render()
 
+    def on_coloropacity_active_array_change(self, active_data_array):
+        if not active_data_array:
+            return
+
+        proxy = self.ctx.proxy
+
+        if proxy is None:
+            return
+    
+        proxy.ColorArrayName = ("POINTS", active_data_array)
+
     @watch("Visibility")
     def _on_visibility_change(self, visibility):
-        proxy = getattr(self, "proxy", None)
+        proxy = self.ctx.proxy
+
         if proxy is None:
             return
 
@@ -121,32 +135,16 @@ class VolumeProperties(StateDataModel):
         self.push()
         self.render()
 
-    def render(self):
+    def render(self, *args):
         get_instance(self.View).render()
 
     def reset_camera(self):
         get_instance(self.View).render()
 
-    def reset_color_range(self):
-        proxy = getattr(self, "proxy", None)
-        if proxy is None:
-            return
-
-        # Update data related info
-        source_proxy = proxy.Input
-        array = source_proxy.GetPointDataInformation().GetArray(self.color_by)
-        self.color_range = array.GetRange()
-        self.use_color_range_as_bounds()
-
-    def use_color_range_as_bounds(self):
-        v_min, v_max = self.color_range
-        step = (v_max - v_min) / 255
-        self.color_range_bounds = (v_min, v_max, step)
-
 
 class VolumeRepresentation(TrameComponent):
-    def __init__(self, pipeline_manager, source_info, view_info):
-        source_id, source_proxy = source_info
+    def __init__(self, pipeline_manager, source_proxy: SourceProxy, view_info):
+        source_id = source_proxy._id
         view_id, view_proxy = view_info
         super().__init__(server=pipeline_manager.server)
         self.props = VolumeProperties(
@@ -165,9 +163,12 @@ class VolumeRepresentation(TrameComponent):
             )
         )
 
-        self.proxy.Input = source_proxy
+        self.proxy.Input = source_proxy.ctx.proxy
         view_proxy.Representations = [*view_proxy.Representations, self.proxy]
-
-        self.props.proxy = self.proxy
+        self.props.ctx.proxy = self.proxy
+        self.props.ctx.source = source_proxy
+        coloropacity = create_default_coloropacity(source_proxy)
+        self.props.ctx.coloropacity = coloropacity
+        self.props._on_custom_coloropacity_change(False) # default to using the upstream source colormap
         self.props.pull()
         self.props.reset_camera()

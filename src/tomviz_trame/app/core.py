@@ -20,6 +20,8 @@ class Tomviz(TrameApp):
         # Global helper
         self.ctx.pipeline = PipelineManager(server=self.server)
         self.ctx.colormaps = generate_colormaps(self.server)
+        self.state.colormaps_id = self.ctx.colormaps._id
+        self.state.show_coloropacity = True
         self.ctx.operators = Operators(
             server=self.server,
             config_file=args.operators,
@@ -82,8 +84,9 @@ class Tomviz(TrameApp):
                     style="max-height: calc(100vh - 48px)",
                 ):
                     ui.PipelineSection()
-                    ui.DataInformationSection()
+                    ui.ColorOpacitySection()
                     ui.PropertiesSections()
+                    ui.DataInformationSection()
 
             # Main content
             with v3.VMain():

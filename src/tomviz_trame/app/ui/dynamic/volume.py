@@ -2,7 +2,6 @@ from trame.ui.html import DivLayout
 from trame.widgets import dataclass, html
 from trame.widgets import vuetify3 as v3
 
-from tomviz_trame.app import ui
 from tomviz_trame.app.pipelines import RepresentationType
 
 NAME = RepresentationType.VOLUME.name
@@ -87,7 +86,13 @@ class VolumeRepresentationUI(DivLayout):
                     step=0.1,
                 )
 
-                ui.ColorBy()
+                v3.VCheckbox(
+                    label="Custom Color Opacity",
+                    v_model="rep.CustomColoropacity",
+                    density="comfortable",
+                    hide_details=True,
+                    flat=True,
+                )
 
 
 UI = VolumeRepresentationUI

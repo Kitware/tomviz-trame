@@ -6,6 +6,8 @@ from vtkmodules.vtkCommonCore import vtkUnsignedCharArray
 from vtkmodules.vtkCommonDataModel import vtkImageData
 from vtkmodules.vtkIOImage import vtkPNGWriter
 
+from tomviz_trame.app.utils.colors import Color
+
 COLOR_PALETTE = [
     "#4CAF50",
     "#FB8C00",
@@ -16,7 +18,7 @@ COLOR_PALETTE = [
 ]
 
 
-def color_to_float_rgb(color):
+def color_to_float_rgb(color: str) -> Color:
     red = int(color[1:3], 16)
     green = int(color[3:5], 16)
     blue = int(color[5:7], 16)
@@ -25,6 +27,7 @@ def color_to_float_rgb(color):
 
 class ColorPreset(StateDataModel):
     name: str
+    colors: list[Color]
     imgs: tuple[str, str] = ("", "")  # normal, inverted
 
 
@@ -52,6 +55,7 @@ def generate_colormaps(server):
 
     for name in names:
         imgs = []
+        colors = []
         for inverted in range(2):
             lut.ApplyPreset(name, True)
             if inverted:
@@ -64,9 +68,14 @@ def generate_colormaps(server):
             for i in range(samples):
                 value = v_min + step * float(i)
                 vtk_lut.GetColor(value, rgb)
-                r = int(round(rgb[0] * 255))
-                g = int(round(rgb[1] * 255))
-                b = int(round(rgb[2] * 255))
+                r, g, b = rgb
+
+                if inverted == 0:
+                    colors.append((r, g, b))
+
+                r = int(round(r * 255))
+                g = int(round(g * 255))
+                b = int(round(b * 255))
                 colorArray.SetTuple3(i, r, g, b)
 
             writer.Write()
@@ -75,11 +84,15 @@ def generate_colormaps(server):
             base64_img = base64.standard_b64encode(img_bytes).decode("utf-8")
             imgs.append(f"data:image/png;base64,{base64_img}")
 
-        color_maps[name] = imgs
+        color_maps[name] = {
+            "name": name,
+            "colors": colors,
+            "imgs": imgs,
+        }
 
     server.state.palette = COLOR_PALETTE
 
     return ColorMaps(
         server,
-        presets={k: ColorPreset(server, name=k, imgs=v) for k, v in color_maps.items()},
+        presets={k: ColorPreset(server, **v) for k, v in color_maps.items()},
     )

@@ -1,7 +1,8 @@
 from trame.app.dev import reload as dev_reload
 
 from . import (
-    color_by,
+    coloropacity,
+    drawer_coloropacity,
     drawer_info,
     drawer_pipeline,
     drawer_properties,
@@ -11,7 +12,9 @@ from . import (
     toolbar,
     utils,
 )
-from .color_by import ColorBy
+
+from .coloropacity import ColorOpacityEditor
+from .drawer_coloropacity import ColorOpacitySection
 from .drawer_info import DataInformationSection
 from .drawer_pipeline import PipelineSection
 from .drawer_properties import PropertiesSections
@@ -26,7 +29,8 @@ from .utils import toolbar_btn
 def reload(m=None):
     """Reload ui modules to help with the --hot-reload option of trame"""
     dev_reload(
-        color_by,
+        coloropacity,
+        drawer_coloropacity,
         drawer_info,
         drawer_pipeline,
         drawer_properties,
@@ -42,7 +46,8 @@ def reload(m=None):
 
 
 __all__ = [
-    "ColorBy",
+    "ColorOpacityEditor",
+    "ColorOpacitySection",
     "DataInformationSection",
     "FileLoader",
     "PipelineSection",

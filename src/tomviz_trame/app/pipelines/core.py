@@ -1,4 +1,5 @@
 import asyncio
+from typing import Callable
 from enum import Enum
 from pathlib import Path
 
@@ -10,54 +11,25 @@ from trame_dataclass.core import StateDataModel, get_instance
 
 from tomviz_trame.app import module, ui
 from tomviz_trame.app.ui.dynamic import DYNAMIC_TEMPLATES
+from tomviz_trame.app.pipelines.source import SourceProxy
+from tomviz_trame.app.pipelines.coloropacity import ColorOpacity, create_default_coloropacity
 
 
-def extract_arrays(attr) -> list[str]:
-    names = []
-    size = attr.GetNumberOfArrays()
-    for idx in range(size):
-        # logger.debug("Array {}", idx)
-        array = attr.GetArray(idx)
-        logger.debug("name {}", array.Name)
-        names.append(array.Name)
-    return names
+from dataclasses import dataclass
+
+NONE_ID = ""
+
+@dataclass
+class RepresentationPropertiesContext:
+    source: SourceProxy | None = None
+    proxy: servermanager.Proxy | None = None
+    coloropacity: ColorOpacity | None = None
+    coloropacity_unwatch_0: Callable | None = None
+    coloropacity_unwatch_1: Callable | None = None
 
 
-class SourceProxy(StateDataModel):
-    # Data information to display
-    name: str
-    expand_pipeline: bool = True
-    expand_representations: list[str]  # view_ids where reps are expanded
-    dimensions: tuple[int, int, int] = (0, 0, 0)
-    bounds: tuple[float, float, float, float, float, float] = (0, -1, 0, -1, 0, -1)
-    memory: int
-    type: str
-    arrays: list[str]
-
-    # Representations
-    representations: dict[str, list[str]] | None  # { view_id: [rep_id, ...] }
-
-    # Downstream pipelines
-    pipelines: list[str]  # !(str -> SourceProxy) [source_proxy_id, ...]
-
-    # Server only fields
-    # proxy: object | None = field(mode=FieldMode.SERVER_ONLY)
-
-    def update_info(self):
-        proxy = getattr(self, "proxy", None)
-        if proxy is None:
-            return
-
-        info = proxy.GetDataInformation()
-        self.bounds = info.DataInformation.GetBounds()
-        self.memory = info.DataInformation.GetMemorySize()
-        self.type = info.GetDataSetTypeAsString()
-
-        names = set()
-        names.update(extract_arrays(proxy.GetPointDataInformation()))
-        names.update(extract_arrays(proxy.GetCellDataInformation()))
-        names.update(extract_arrays(proxy.GetFieldDataInformation()))
-        self.arrays = list(names)
+class RepresentationProperties:
+    pass
 
 
 class Pipeline(StateDataModel):
@@ -86,21 +58,21 @@ class RepresentationType(Enum):
     def icon(self):
         return f"{module.BASENAME}/assets/representations/{self.value}"
 
-    def create_representation(self, pipeline_manager, proxy_info, view_info):
+    def create_representation(self, pipeline_manager, source_proxy: SourceProxy, view_info):
         if self is RepresentationType.SLICE:
             from .slice import SliceRepresentation
 
-            return SliceRepresentation(pipeline_manager, proxy_info, view_info)
+            return SliceRepresentation(pipeline_manager, source_proxy, view_info)
 
         if self is RepresentationType.OUTLINE:
             from .outline import OutlineRepresentation
 
-            return OutlineRepresentation(pipeline_manager, proxy_info, view_info)
+            return OutlineRepresentation(pipeline_manager, source_proxy, view_info)
 
         if self is RepresentationType.VOLUME:
             from .volume import VolumeRepresentation
 
-            return VolumeRepresentation(pipeline_manager, proxy_info, view_info)
+            return VolumeRepresentation(pipeline_manager, source_proxy, view_info)
 
         return None
 
@@ -117,6 +89,7 @@ class PipelineManager(TrameComponent):
         self.state.active_view_id = None
         self.state.active_data_id = None
         self.state.active_representation_id = None
+        self.state.active_coloropacity_id = None
 
         self.tree.watch(["active_node"], self._on_active_change)
 
@@ -138,17 +111,21 @@ class PipelineManager(TrameComponent):
         )
         reader.UpdatePipeline()
         dataset = SourceProxy(self.server, name=file_path.stem)
-        dataset.proxy = reader
+        dataset.ctx.proxy = reader
         dataset.update_info()
 
-        # make new data active by default
-        self.state.active_data_id = dataset._id
-
+        self.add_default_coloropacity(dataset._id)
         self.add_default_representations(dataset._id, self.state.active_view_id)
+
+        # self.state.active_coloropacity_id = dataset.coloropacity
+
         get_instance(self.state.active_view_id).widget_view.reset_camera()
 
         # Update tracking
         self.tree.children = [*self.tree.children, dataset]
+
+        # make new data node active by default
+        self.tree.active_node = [dataset._id]
 
         return dataset._id
 
@@ -212,6 +189,15 @@ class PipelineManager(TrameComponent):
                 },
             )
 
+    def add_default_coloropacity(self, data_id: str):
+        logger.debug("data_id: {}", data_id)
+        data_obj: SourceProxy = get_instance(data_id)
+
+        if not data_obj.ColorOpacityId:
+            coloropacity = create_default_coloropacity(data_obj)
+            data_obj.ctx.coloropacity = coloropacity
+            data_obj.ColorOpacityId = coloropacity._id
+
     def add_default_representations(self, data_id: str, view_id: str):
         self.add_representation(data_id, view_id, RepresentationType.OUTLINE.name)
         self.add_representation(data_id, view_id, RepresentationType.SLICE.name)
@@ -220,7 +206,6 @@ class PipelineManager(TrameComponent):
         logger.debug("data_id: {}, view_id: {}, type: {}", data_id, view_id, type)
         data_obj = get_instance(data_id)
         view_obj = get_instance(view_id)
-        data_proxy = data_obj.proxy
         view_proxy = view_obj.pv_view
 
         if view_id not in data_obj.expand_representations:
@@ -237,7 +222,7 @@ class PipelineManager(TrameComponent):
 
         new_reps = {**data_obj.representations}
         rep = RepresentationType[type].create_representation(
-            self, (data_id, data_proxy), (view_id, view_proxy)
+            self, data_obj, (view_id, view_proxy)
         )
         if rep:
             self.representations.setdefault(view_id, []).append(rep)
@@ -251,21 +236,24 @@ class PipelineManager(TrameComponent):
 
         return None
 
-    def _on_active_change(self, active_node):
-        logger.debug("active_node: {}", active_node)
+    def _on_active_change(self, active_node: list[str]):
+        logger.debug("active_node: {}", active_node[0])
         if active_node:
             obj = get_instance(active_node[0])
+            coloropacity_id = getattr(obj, "ColorOpacityId", "")
             if isinstance(obj, SourceProxy):
                 with self.state as s:
                     s.active_data_id = active_node[0]
                     s.active_representation_id = None
                     s.property_templates = []
-            else:
+                    s.active_coloropacity_id = coloropacity_id
+            elif isinstance(obj, RepresentationProperties):
                 # representation
                 with self.state as s:
                     s.active_representation_id = active_node[0]
                     s.active_data_id = obj.Input
                     s.active_view_id = obj.View
+                    s.active_coloropacity_id = coloropacity_id
 
                     rep_tpl = DYNAMIC_TEMPLATES.get(obj.Type)
                     if rep_tpl:
@@ -279,6 +267,7 @@ class PipelineManager(TrameComponent):
                 s.active_representation_id = None
                 s.active_view_id = None
                 s.property_templates = []
+                s.active_coloropacity_id = ""
 
     def reset_color_range(self, rep_id):
         get_instance(rep_id).reset_color_range()
