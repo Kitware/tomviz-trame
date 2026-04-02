@@ -96,6 +96,6 @@ class Tomviz(TrameApp):
                     active_panel=(self.ctx.pipeline.activate_panel, "[$event]"),
                 )
 
-                # Add a view if none defined
-                if not self.ctx.pipeline.views:
-                    self.ctx.pipeline.add_view()
+        # Add a view if none defined
+        if not self.ctx.pipeline.views:
+            self.ctx.pipeline.add_view()
