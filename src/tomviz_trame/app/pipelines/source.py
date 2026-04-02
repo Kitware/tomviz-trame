@@ -1,13 +1,16 @@
-from loguru import logger
-
-from typing import Any
 import math
-
 from dataclasses import dataclass
+from typing import Any
 
+from loguru import logger
 from paraview import servermanager, simple
-
 from trame_dataclass.core import StateDataModel
+
+
+def log10(v):
+    if v > 0:
+        return math.log10(v)
+    return 0
 
 
 def extract_arrays(attr) -> list[str]:
@@ -19,10 +22,15 @@ def extract_arrays(attr) -> list[str]:
         names.append(array.Name)
     return names
 
+
 def extract_histograms(proxy, array_name, n_bins, log_scale) -> list[int | float]:
     histograms = []
 
-    hist_proxy = simple.Histogram(Input=proxy, BinCount=n_bins, SelectInputArray=array_name)
+    hist_proxy = simple.Histogram(
+        Input=proxy,
+        BinCount=n_bins,
+        SelectInputArray=array_name,
+    )
     hist_proxy.UpdatePipeline()
     hist_output = simple.io.FetchData(proxy=hist_proxy)
     hist_table = hist_output[0]
@@ -31,9 +39,10 @@ def extract_histograms(proxy, array_name, n_bins, log_scale) -> list[int | float
         histograms.append(hist_table.GetValue(row, 1).ToInt())
 
     if log_scale:
-        histograms = list(map(lambda v : math.log10(v) if v > 0 else 0, histograms))
+        histograms = list(map(log10, histograms))
 
     return histograms
+
 
 @dataclass
 class SourceProxyContext:

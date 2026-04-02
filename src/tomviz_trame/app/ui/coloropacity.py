@@ -1,19 +1,25 @@
-from trame.widgets import dataclass, html, color_opacity_editor
+from trame.widgets import color_opacity_editor, dataclass, html
 from trame.widgets import vuetify3 as v3
 
 
 class ColorOpacityEditor(html.Div):
-    def __init__(self, coloropacity_instance="active_coloropacity_id", colormaps_instance=""):
+    def __init__(
+        self,
+        coloropacity_instance="active_coloropacity_id",
+        colormaps_instance="",
+    ):
         super().__init__()
 
         with self:
             with dataclass.Provider(
                 v_if=coloropacity_instance,
-                name="coloropacity", instance=(coloropacity_instance,)
+                name="coloropacity",
+                instance=(coloropacity_instance,),
             ):
                 with dataclass.Provider(
                     v_if=colormaps_instance,
-                    name="colormaps", instance=(colormaps_instance,)
+                    name="colormaps",
+                    instance=(colormaps_instance,),
                 ):
                     with v3.Template(
                         v_if="coloropacity && colormaps && coloropacity.scaled_colors && coloropacity.scaled_opacities",
@@ -38,7 +44,9 @@ class ColorOpacityEditor(html.Div):
                         )
 
                         with v3.Template(v_if="coloropacity.active_data_array"):
-                            v3.VLabel("Color Range [{{ (coloropacity.color_range?.[0] || 0).toFixed(1) }}, {{ (coloropacity.color_range?.[1] || 1).toFixed(1) }}]")
+                            v3.VLabel(
+                                "Color Range [{{ (coloropacity.color_range?.[0] || 0).toFixed(1) }}, {{ (coloropacity.color_range?.[1] || 1).toFixed(1) }}]"
+                            )
                             v3.VRangeSlider(
                                 v_model="coloropacity.color_range",
                                 min=("coloropacity.data_range[0]",),
@@ -82,7 +90,9 @@ class ColorOpacityEditor(html.Div):
                                             hide_details=True,
                                             density="comfortable",
                                             prepend_inner_icon="mdi-magnify",
-                                            placeholder=("coloropacity.active_color_preset",),
+                                            placeholder=(
+                                                "coloropacity.active_color_preset",
+                                            ),
                                         )
                                         with v3.VList(density="comfortable"):
                                             with v3.VListItem(
@@ -144,7 +154,9 @@ class ColorOpacityEditor(html.Div):
                             v_model="coloropacity.solid_color",
                         ):
                             with v3.VItem(v_for="(color, i) in palette", key="i"):
-                                with v3.Template(v_slot_default="{ isSelected, toggle }"):
+                                with v3.Template(
+                                    v_slot_default="{ isSelected, toggle }"
+                                ):
                                     with v3.VAvatar(
                                         color=("isSelected ? color : 'transparent'",),
                                         size=24,

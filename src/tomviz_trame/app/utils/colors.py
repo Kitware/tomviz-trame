@@ -1,5 +1,5 @@
-from typing import TypeVar
 import math
+from typing import TypeVar
 
 T = TypeVar("T")
 
@@ -20,15 +20,14 @@ def make_linear_nodes(values: list[T], range: tuple[float, float]) -> list[Node[
 
     return nodes
 
+
 def rescale_nodes(nodes: list[Node[T]], range: tuple[float, float]) -> list[Node[T]]:
     curr_range = [math.inf, -math.inf]
 
     for s, _ in nodes:
-        if s < curr_range[0]:
-            curr_range[0] = s
+        curr_range[0] = min(s, curr_range[0])
 
-        if s > curr_range[1]:
-            curr_range[1] = s
+        curr_range[1] = max(s, curr_range[1])
 
     curr_delta = curr_range[1] - curr_range[0]
     new_delta = range[1] - range[0]

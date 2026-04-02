@@ -1,5 +1,6 @@
 import asyncio
-from typing import Callable
+from collections.abc import Callable
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 
@@ -10,14 +11,15 @@ from trame.decorators import trigger
 from trame_dataclass.core import StateDataModel, get_instance
 
 from tomviz_trame.app import module, ui
-from tomviz_trame.app.ui.dynamic import DYNAMIC_TEMPLATES
+from tomviz_trame.app.pipelines.coloropacity import (
+    ColorOpacity,
+    create_default_coloropacity,
+)
 from tomviz_trame.app.pipelines.source import SourceProxy
-from tomviz_trame.app.pipelines.coloropacity import ColorOpacity, create_default_coloropacity
-
-
-from dataclasses import dataclass
+from tomviz_trame.app.ui.dynamic import DYNAMIC_TEMPLATES
 
 NONE_ID = ""
+
 
 @dataclass
 class RepresentationPropertiesContext:
@@ -58,7 +60,9 @@ class RepresentationType(Enum):
     def icon(self):
         return f"{module.BASENAME}/assets/representations/{self.value}"
 
-    def create_representation(self, pipeline_manager, source_proxy: SourceProxy, view_info):
+    def create_representation(
+        self, pipeline_manager, source_proxy: SourceProxy, view_info
+    ):
         if self is RepresentationType.SLICE:
             from .slice import SliceRepresentation
 

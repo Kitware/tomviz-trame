@@ -3,9 +3,16 @@ from paraview import servermanager
 from trame_client.widgets.core import TrameComponent
 from trame_dataclass.core import StateDataModel, get_instance, watch
 
-from tomviz_trame.app.pipelines.core import RepresentationProperties, RepresentationPropertiesContext, RepresentationType
+from tomviz_trame.app.pipelines.coloropacity import (
+    ColorOpacity,
+    create_default_coloropacity,
+)
+from tomviz_trame.app.pipelines.core import (
+    RepresentationProperties,
+    RepresentationPropertiesContext,
+    RepresentationType,
+)
 from tomviz_trame.app.pipelines.source import SourceProxy
-from tomviz_trame.app.pipelines.coloropacity import ColorOpacity, create_default_coloropacity
 
 
 class SliceProperties(RepresentationProperties, StateDataModel):
@@ -16,8 +23,10 @@ class SliceProperties(RepresentationProperties, StateDataModel):
     Visibility: bool
     View: str
 
-    ColorOpacityId: str # id of the active coloropacity for this representation
-    CustomColoropacity: bool # use this representation's coloropacity or the source's coloropacity
+    ColorOpacityId: str  # id of the active coloropacity for this representation
+    CustomColoropacity: (
+        bool  # use this representation's coloropacity or the source's coloropacity
+    )
 
     Dimensions: tuple[int, int, int] = (0, 0, 0)
     Slice: int
@@ -84,7 +93,7 @@ class SliceProperties(RepresentationProperties, StateDataModel):
             self.ColorOpacityId = ""
             return
 
-        active_coloropacity_id = self.server.state.active_coloropacity_id      
+        active_coloropacity_id = self.server.state.active_coloropacity_id
 
         if active_coloropacity_id == self.ColorOpacityId:
             with self.server.state as s:
@@ -92,10 +101,14 @@ class SliceProperties(RepresentationProperties, StateDataModel):
 
         self.ColorOpacityId = coloropacity._id
 
-        self.ctx.coloropacity_unwatch_0 = coloropacity.watch(["active_data_array"], self.on_coloropacity_active_array_change)
+        self.ctx.coloropacity_unwatch_0 = coloropacity.watch(
+            ["active_data_array"], self.on_coloropacity_active_array_change
+        )
 
         # can this rerender happen automatically when the lut/pwf is modified?
-        self.ctx.coloropacity_unwatch_1 = coloropacity.watch(["color_range", "active_color_preset", "invert_color_preset"], self.render)
+        self.ctx.coloropacity_unwatch_1 = coloropacity.watch(
+            ["color_range", "active_color_preset", "invert_color_preset"], self.render
+        )
 
         self.on_coloropacity_active_array_change(coloropacity.active_data_array)
 
@@ -145,7 +158,7 @@ class SliceProperties(RepresentationProperties, StateDataModel):
         proxy.Visibility = int(visibility)
         self.render()
 
-    def render(self, *args):
+    def render(self, *_):
         get_instance(self.View).render()
 
     def reset_camera(self):
@@ -179,6 +192,8 @@ class SliceRepresentation(TrameComponent):
         self.props.ctx.proxy = self.proxy
         coloropacity = create_default_coloropacity(source_proxy)
         self.props.ctx.coloropacity = coloropacity
-        self.props._on_custom_coloropacity_change(False) # default to using the upstream source colormap
+        self.props._on_custom_coloropacity_change(
+            False
+        )  # default to using the upstream source colormap
         self.props.pull()
         self.props.reset_camera()

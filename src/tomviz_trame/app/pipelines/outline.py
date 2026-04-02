@@ -2,8 +2,12 @@ from paraview import servermanager
 from trame_client.widgets.core import TrameComponent
 from trame_dataclass.core import StateDataModel, get_instance, watch
 
+from tomviz_trame.app.pipelines.core import (
+    RepresentationProperties,
+    RepresentationPropertiesContext,
+    RepresentationType,
+)
 from tomviz_trame.app.pipelines.source import SourceProxy
-from tomviz_trame.app.pipelines.core import RepresentationProperties, RepresentationPropertiesContext, RepresentationType
 
 
 class OutlineProperties(RepresentationProperties, StateDataModel):
