@@ -1,8 +1,11 @@
+from __future__ import annotations
+
 from paraview import simple
 from trame.ui.html import DivLayout
 from trame.widgets import paraview as pvw
 from trame.widgets import vuetify3 as v3
-from trame_dataclass.core import StateDataModel, watch
+
+from tomviz_trame.app.data_model import WindowInternalState
 
 VIEW_COLORS = [
     "#2196F3",  # blue
@@ -24,62 +27,6 @@ COLOR_GENERTOR = color_generator()
 
 def next_color():
     return next(COLOR_GENERTOR)
-
-
-class WindowInternalState(StateDataModel):
-    color: str
-    interactive_3d: bool = True
-    expanded: bool = False
-    orientation_axes_visibility: bool = True
-    center_axes_visibility: bool = False
-    # pv_view: object | None = field(mode=FieldMode.SERVER_ONLY)
-    # widget_view: object | None = field(mode=FieldMode.SERVER_ONLY)
-
-    @watch("interactive_3d")
-    def _on_change(self, interactive_3d):
-        pv_view = getattr(self, "pv_view", None)
-        widget_view = getattr(self, "widget_view", None)
-        if pv_view is None or widget_view is None:
-            return
-
-        if interactive_3d:
-            pv_view.InteractionMode = "3D"
-        else:
-            pv_view.InteractionMode = "2D"
-
-        widget_view.update()
-
-    @watch("orientation_axes_visibility")
-    def _on_axes_visibility(self, orientation_axes_visibility):
-        pv_view = getattr(self, "pv_view", None)
-        widget_view = getattr(self, "widget_view", None)
-        if pv_view is None or widget_view is None:
-            return
-
-        pv_view.OrientationAxesVisibility = int(orientation_axes_visibility)
-        widget_view.update()
-
-    @watch("center_axes_visibility")
-    def _on_center_visibility(self, center_axes_visibility):
-        pv_view = getattr(self, "pv_view", None)
-        widget_view = getattr(self, "widget_view", None)
-        if pv_view is None or widget_view is None:
-            return
-
-        pv_view.CenterAxesVisibility = int(center_axes_visibility)
-        widget_view.update()
-
-    def render(self):
-        view = getattr(self, "widget_view", None)
-        if view is None:
-            return
-        view.update()
-
-    def reset_camera(self):
-        view = getattr(self, "widget_view", None)
-        if view is None:
-            return
-        view.reset_camera()
 
 
 class RenderWindow(DivLayout):

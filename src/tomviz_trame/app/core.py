@@ -18,7 +18,7 @@ class Tomviz(TrameApp):
         args = cli.configure(self.server.cli)
 
         # Force dataclass initialization to v1
-        dataclass.initialize(self.server, version="v1")
+        dataclass.initialize(self.server, version="v2")
 
         # Global helper
         self.ctx.pipeline = PipelineManager(server=self.server)
