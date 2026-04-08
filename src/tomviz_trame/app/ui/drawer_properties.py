@@ -21,8 +21,7 @@ class PropertiesSections(html.Div):
                     with dataclass.Provider(
                         name="rep", instance=("active_representation_id",)
                     ):
-                        with dataclass.Provider(name="view", instance=("rep.View",)):
-                            v3.VIcon("mdi-stop", color=("view.color",))
+                        v3.VIcon("mdi-stop", color=("rep?.view?.color",))
             with v3.VExpandTransition():
                 client.ServerTemplate(
                     v_for="tpl in property_templates",

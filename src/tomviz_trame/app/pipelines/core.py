@@ -35,17 +35,28 @@ class RepresentationType(Enum):
     def icon(self):
         return f"{module.BASENAME}/assets/representations/{self.value}"
 
+    @property
+    def props(self):
+        return {
+            "label": self.label,
+            "name": self.name,
+            "icon": self.icon,
+        }
+
     def register_class(self, klass):
         self.representation_class = klass
 
     def create_representation(
-        self, pipeline_manager, source_proxy: data_model.SourceProxy, view_info
+        self,
+        pipeline_manager,
+        source_proxy: data_model.SourceProxy,
+        view: data_model.WindowInternalState,
     ):
         if self.representation_class is None:
             msg = f"No representation found for {self.label}"
             raise ValueError(msg)
 
-        return self.representation_class(pipeline_manager, source_proxy, view_info)
+        return self.representation_class(pipeline_manager, source_proxy, view)
 
 
 class PipelineManager(TrameComponent):
@@ -177,7 +188,6 @@ class PipelineManager(TrameComponent):
         logger.debug("data_id: {}, view_id: {}, type: {}", data_id, view_id, type)
         data_obj = data_model.get_instance(data_id)
         view_obj = data_model.get_instance(view_id)
-        view_proxy = view_obj.pv_view
 
         if view_id not in data_obj.expand_representations:
             data_obj.expand_representations = [
@@ -192,9 +202,7 @@ class PipelineManager(TrameComponent):
             data_obj.representations[view_id] = []
 
         new_reps = {**data_obj.representations}
-        rep = RepresentationType[type].create_representation(
-            self, data_obj, (view_id, view_proxy)
-        )
+        rep = RepresentationType[type].create_representation(self, data_obj, view_obj)
         if rep:
             self.representations.setdefault(view_id, []).append(rep)
             new_reps[view_id] = [
@@ -222,11 +230,11 @@ class PipelineManager(TrameComponent):
                 # representation
                 with self.state as s:
                     s.active_representation_id = active_node[0]
-                    s.active_data_id = obj.Input
-                    s.active_view_id = obj.View
+                    s.active_data_id = obj.input._id
+                    s.active_view_id = obj.view._id
                     s.active_coloropacity_id = coloropacity_id
 
-                    rep_tpl = DYNAMIC_TEMPLATES.get(obj.Type)
+                    rep_tpl = DYNAMIC_TEMPLATES.get(obj.name)
                     if rep_tpl:
                         s.property_templates = [rep_tpl]
                     else:

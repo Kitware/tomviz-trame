@@ -9,10 +9,12 @@ from tomviz_trame.app.pipelines.core import RepresentationType
 
 class VolumeRepresentation(TrameComponent):
     def __init__(
-        self, pipeline_manager, source_proxy: data_model.SourceProxy, view_info
+        self,
+        pipeline_manager,
+        source_proxy: data_model.SourceProxy,
+        view: data_model.WindowInternalState,
     ):
-        source_id = source_proxy._id
-        view_id, view_proxy = view_info
+        view_proxy = view.pv_view
         super().__init__(server=pipeline_manager.server)
 
         self._pm = pipeline_manager
@@ -27,12 +29,10 @@ class VolumeRepresentation(TrameComponent):
 
         self.props = data_model.VolumeProperties(
             self.server,
-            Input=source_id,
-            Label=RepresentationType.VOLUME.label,
-            Type=RepresentationType.VOLUME.name,
-            Icon=RepresentationType.VOLUME.icon,
-            View=view_id,
+            input=source_proxy,
+            view=view,
             proxy=self.proxy,
+            **RepresentationType.VOLUME.props,
         )
 
 

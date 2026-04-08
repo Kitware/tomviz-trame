@@ -121,9 +121,9 @@ class PipelineSection(html.Div):
                                                                             ),
                                                                         ):
                                                                             with v3.VListItem(
-                                                                                title=(
-                                                                                    "rep.Label",
-                                                                                ),
+                                                                                title=[
+                                                                                    "rep.label"
+                                                                                ],
                                                                                 classes="representation px-2",
                                                                                 value=(
                                                                                     "rep._id",
@@ -133,9 +133,9 @@ class PipelineSection(html.Div):
                                                                                     v_slot_prepend=True
                                                                                 ):
                                                                                     v3.VAvatar(
-                                                                                        image=(
-                                                                                            "rep.Icon",
-                                                                                        ),
+                                                                                        image=[
+                                                                                            "rep.icon"
+                                                                                        ],
                                                                                         tile=True,
                                                                                         size="small",
                                                                                         classes="rounded pa-1",

@@ -7,11 +7,13 @@ from trame.app.dataclass import (
     StateDataModel,
     Sync,
     TypeValidation,
-    get_instance,
     watch,
 )
 
+from tomviz_trame.app.data_model.pipeline import SourceProxy
+
 from .color_opacity import ColorOpacity, create_default_coloropacity
+from .view import WindowInternalState
 
 
 # -----------------------------------------------------------------------------
@@ -25,10 +27,10 @@ class ViewMixin:
         self.render()
 
     def render(self, *_):
-        get_instance(self.View).render()
+        self.view.render()
 
     def reset_camera(self, *_):
-        get_instance(self.View).render()
+        self.view.render()
 
 
 # -----------------------------------------------------------------------------
@@ -38,11 +40,7 @@ class ColorOpacityMixin:
         self.coloropacity_unwatch_1: Callable | None = None
 
     def post_init_color_opacity(self):
-        self.coloropacity: ColorOpacity = create_default_coloropacity(self.source)
-
-    @property
-    def source(self):
-        return get_instance(self.Input)
+        self.coloropacity: ColorOpacity = create_default_coloropacity(self.input)
 
     @watch("CustomColoropacity", eager=True)
     def _on_custom_coloropacity_change(self, custom):
@@ -56,7 +54,7 @@ class ColorOpacityMixin:
             self.coloropacity_unwatch_1 = None
 
         coloropacity: ColorOpacity | None = (
-            self.coloropacity if custom else self.source.coloropacity
+            self.coloropacity if custom else self.input.coloropacity
         )
 
         if coloropacity is None:
@@ -111,13 +109,15 @@ class ColorOpacityMixin:
 # -----------------------------------------------------------------------------
 class OutlineProperties(ViewMixin, StateDataModel):
     # Core representation properties
-    Input = Sync(str)  # id of SourceProxy
-    Label = Sync(str)
-    Type = Sync(str)
-    Icon = Sync(str)
-    Visibility = Sync(bool, False)
-    View = Sync(str)
+    input = Sync(SourceProxy, has_dataclass=True)
+    view = Sync(WindowInternalState, has_dataclass=True)
     proxy = ServerOnly(servermanager.Proxy | None)
+    label = Sync(str)
+    name = Sync(str)
+    icon = Sync(str)
+
+    # Outline specific
+    Visibility = Sync(bool, False)
 
     def __init__(self, server, **kwargs):
         super().__init__(server, **kwargs)
@@ -134,19 +134,19 @@ class OutlineProperties(ViewMixin, StateDataModel):
 # -----------------------------------------------------------------------------
 class VolumeProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
     # Core representation properties
-    Input = Sync(str)  # id of SourceProxy
-    Label = Sync(str)
-    Type = Sync(str)
-    Icon = Sync(str)
-    Visibility = Sync(bool, False)
-    View = Sync(str)
+    input = Sync(SourceProxy, has_dataclass=True)
+    view = Sync(WindowInternalState, has_dataclass=True)
     proxy = ServerOnly(servermanager.Proxy | None)
+    label = Sync(str)
+    name = Sync(str)
+    icon = Sync(str)
 
     # Color/Opacity properties
     ColorOpacityId = Sync(str)  # id of the active coloropacity for this representation
     CustomColoropacity = Sync(bool, False)  # use local/source coloropacity
 
     # Volume specific
+    Visibility = Sync(bool, False)
     InterpolationType = Sync(str, "Nearest")  # Nearest, Linear, Cubic
     Shade = Sync(bool, False)
     GlobalIlluminationReach = Sync(float, 0)  # [0-1]
@@ -199,19 +199,19 @@ class VolumeProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
 # -----------------------------------------------------------------------------
 class SliceProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
     # Core representation properties
-    Input = Sync(str)  # id of SourceProxy
-    Label = Sync(str)
-    Type = Sync(str)
-    Icon = Sync(str)
-    Visibility = Sync(bool, False)
-    View = Sync(str)
+    input = Sync(SourceProxy, has_dataclass=True)
+    view = Sync(WindowInternalState, has_dataclass=True)
     proxy = ServerOnly(servermanager.Proxy | None)
+    label = Sync(str)
+    name = Sync(str)
+    icon = Sync(str)
 
     # Color/Opacity properties
     ColorOpacityId = Sync(str)  # id of the active coloropacity for this representation
     CustomColoropacity = Sync(bool, False)  # use local/source coloropacity
 
     # Slice specific
+    Visibility = Sync(bool, False)
     Dimensions = Sync(tuple[int, int, int], (0, 0, 0))
     Slice = Sync(int, 0)
     SliceMax = Sync(int, 0)

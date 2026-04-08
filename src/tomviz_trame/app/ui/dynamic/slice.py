@@ -16,7 +16,7 @@ class SliceRepresentationUI(DivLayout):
             self,
             dataclass.Provider(name="rep", instance=("active_representation_id",)),
         ):
-            with v3.VCard(classes="border-thin pa-2", flat=True):
+            with v3.VCard(classes="border-thin pa-2 mb-2", flat=True):
                 v3.VSelect(
                     label="Slice direction",
                     v_model="rep.SliceDirection",
