@@ -37,3 +37,6 @@ class OutlineRepresentation(TrameComponent):
         self.props.proxy = self.proxy
         self.props.pull()
         self.props.reset_camera()
+
+
+RepresentationType.OUTLINE.register_class(OutlineRepresentation)

@@ -18,6 +18,7 @@ class RepresentationType(Enum):
         obj = object.__new__(cls)
         obj._value_ = name
         obj.label = label
+        obj.representation_class = None
         return obj
 
     CLIP = ("clip.svg", "Clip")
@@ -34,25 +35,17 @@ class RepresentationType(Enum):
     def icon(self):
         return f"{module.BASENAME}/assets/representations/{self.value}"
 
+    def register_class(self, klass):
+        self.representation_class = klass
+
     def create_representation(
         self, pipeline_manager, source_proxy: data_model.SourceProxy, view_info
     ):
-        if self is RepresentationType.SLICE:
-            from .slice import SliceRepresentation
+        if self.representation_class is None:
+            msg = f"No representation found for {self.label}"
+            raise ValueError(msg)
 
-            return SliceRepresentation(pipeline_manager, source_proxy, view_info)
-
-        if self is RepresentationType.OUTLINE:
-            from .outline import OutlineRepresentation
-
-            return OutlineRepresentation(pipeline_manager, source_proxy, view_info)
-
-        if self is RepresentationType.VOLUME:
-            from .volume import VolumeRepresentation
-
-            return VolumeRepresentation(pipeline_manager, source_proxy, view_info)
-
-        return None
+        return self.representation_class(pipeline_manager, source_proxy, view_info)
 
 
 class PipelineManager(TrameComponent):
