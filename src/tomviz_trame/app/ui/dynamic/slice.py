@@ -42,7 +42,7 @@ class SliceRepresentationUI(DivLayout):
                     v3.VLabel("{{ rep.SliceMax }}", classes="text-caption")
                 v3.VCheckbox(
                     label="Custom Color Opacity",
-                    v_model="rep.CustomColoropacity",
+                    v_model="rep.use_internal_color_opacity",
                     density="comfortable",
                     hide_details=True,
                     flat=True,

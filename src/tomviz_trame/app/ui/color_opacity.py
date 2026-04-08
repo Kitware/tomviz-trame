@@ -5,16 +5,16 @@ from trame.widgets import vuetify3 as v3
 class ColorOpacityEditor(html.Div):
     def __init__(
         self,
-        coloropacity_instance="active_coloropacity_id",
+        color_opacity_instance="active_color_opacity_id",
         colormaps_instance="",
     ):
         super().__init__()
 
         with self:
             with dataclass.Provider(
-                v_if=coloropacity_instance,
-                name="coloropacity",
-                instance=(coloropacity_instance,),
+                v_if=color_opacity_instance,
+                name="color_opacity",
+                instance=(color_opacity_instance,),
             ):
                 with dataclass.Provider(
                     v_if=colormaps_instance,
@@ -22,14 +22,14 @@ class ColorOpacityEditor(html.Div):
                     instance=(colormaps_instance,),
                 ):
                     with v3.Template(
-                        v_if="coloropacity && colormaps && coloropacity.scaled_colors && coloropacity.scaled_opacities",
+                        v_if="color_opacity && colormaps && color_opacity.scaled_colors && color_opacity.scaled_opacities",
                     ):
                         color_opacity_editor.ColorOpacityEditor(
                             style="height: 15rem;",
-                            v_model_colorNodes=("coloropacity.scaled_colors",),
-                            v_model_opacityNodes=("coloropacity.scaled_opacities",),
-                            histograms=("coloropacity.scaled_histograms",),
-                            histograms_range=("coloropacity.histograms_range",),
+                            v_model_colorNodes=("color_opacity.scaled_colors",),
+                            v_model_opacityNodes=("color_opacity.scaled_opacities",),
+                            histograms=("color_opacity.scaled_histograms",),
+                            histograms_range=("color_opacity.histograms_range",),
                             scalar_range=("default_scalar_range", [0, 1]),
                             show_histograms=("show_histograms", False),
                             show_color_editor=False,
@@ -43,15 +43,15 @@ class ColorOpacityEditor(html.Div):
                             # handle_border_color=("handle_border_color", [0.75, 0.75, 0.75, 1]),
                         )
 
-                        with v3.Template(v_if="coloropacity.active_data_array"):
+                        with v3.Template(v_if="color_opacity.active_data_array"):
                             v3.VLabel(
-                                "Color Range [{{ (coloropacity.color_range?.[0] || 0).toFixed(1) }}, {{ (coloropacity.color_range?.[1] || 1).toFixed(1) }}]"
+                                "Color Range [{{ (color_opacity.color_range?.[0] || 0).toFixed(1) }}, {{ (color_opacity.color_range?.[1] || 1).toFixed(1) }}]"
                             )
                             v3.VRangeSlider(
-                                v_model="coloropacity.color_range",
-                                min=("coloropacity.data_range[0]",),
-                                max=("coloropacity.data_range[1]",),
-                                step=("coloropacity.data_range[2]",),
+                                v_model="color_opacity.color_range",
+                                min=("color_opacity.data_range[0]",),
+                                max=("color_opacity.data_range[1]",),
+                                step=("color_opacity.data_range[2]",),
                                 density="comfortable",
                                 hide_details=True,
                             )
@@ -77,7 +77,7 @@ class ColorOpacityEditor(html.Div):
                                             html.Img(
                                                 classes="position-absolute w-100 h-100",
                                                 src=(
-                                                    "colormaps.presets?.[coloropacity.active_color_preset].imgs[Number(coloropacity.invert_color_preset)]",
+                                                    "colormaps.presets?.[color_opacity.active_color_preset].imgs[Number(color_opacity.invert_color_preset)]",
                                                 ),
                                             )
                                     with v3.VCard(style="width: 300px;"):
@@ -91,7 +91,7 @@ class ColorOpacityEditor(html.Div):
                                             density="comfortable",
                                             prepend_inner_icon="mdi-magnify",
                                             placeholder=(
-                                                "coloropacity.active_color_preset",
+                                                "color_opacity.active_color_preset",
                                             ),
                                         )
                                         with v3.VList(density="comfortable"):
@@ -99,27 +99,27 @@ class ColorOpacityEditor(html.Div):
                                                 v_for="preset, name in colormaps.presets",
                                                 key="idx",
                                                 subtitle=("name",),
-                                                click="coloropacity.active_color_preset = name;color_preset_filter='';",
+                                                click="color_opacity.active_color_preset = name;color_preset_filter='';",
                                                 v_show="name.toLowerCase().includes(color_preset_filter.toLowerCase())",
                                             ):
                                                 html.Img(
                                                     src=(
-                                                        "preset.imgs[Number(coloropacity.invert_color_preset)]",
+                                                        "preset.imgs[Number(color_opacity.invert_color_preset)]",
                                                     ),
                                                     classes="rounded",
                                                     style="height: 16px;max-width: 100%;",
                                                 )
                                 v3.VBtn(
                                     icon=(
-                                        "coloropacity.invert_color_preset ? 'mdi-invert-colors' : 'mdi-invert-colors-off'",
+                                        "color_opacity.invert_color_preset ? 'mdi-invert-colors' : 'mdi-invert-colors-off'",
                                     ),
                                     density="compact",
                                     size="small",
                                     hide_details=True,
                                     variant="plain",
                                     classes="rounded ml-2",
-                                    click="coloropacity.invert_color_preset = !coloropacity.invert_color_preset",
-                                    disabled=("!coloropacity.active_data_array",),
+                                    click="color_opacity.invert_color_preset = !color_opacity.invert_color_preset",
+                                    disabled=("!color_opacity.active_data_array",),
                                     v_tooltip_top="'Invert color preset'",
                                 )
 
@@ -130,16 +130,16 @@ class ColorOpacityEditor(html.Div):
                                     hide_details=True,
                                     variant="plain",
                                     classes="rounded ml-2",
-                                    click="coloropacity.color_range = [coloropacity.data_range[0], coloropacity.data_range[1]]",
-                                    disabled=("!coloropacity.active_data_array",),
+                                    click="color_opacity.color_range = [color_opacity.data_range[0], color_opacity.data_range[1]]",
+                                    disabled=("!color_opacity.active_data_array",),
                                     v_tooltip_top="'Reset color range to the full data range'",
                                 )
 
                             with html.Div(classes="d-flex align-center"):
                                 v3.VSelect(
                                     label="Color By",
-                                    v_model="coloropacity.active_data_array",
-                                    items=("coloropacity.data_arrays",),
+                                    v_model="color_opacity.active_data_array",
+                                    items=("color_opacity.data_arrays",),
                                     variant="solo-filled",
                                     flat=True,
                                     density="compact",
@@ -151,7 +151,7 @@ class ColorOpacityEditor(html.Div):
                             v_else=True,
                             classes="d-inline-flex ga-1",
                             mandatory="force",
-                            v_model="coloropacity.solid_color",
+                            v_model="color_opacity.solid_color",
                         ):
                             with v3.VItem(v_for="(color, i) in palette", key="i"):
                                 with v3.Template(

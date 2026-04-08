@@ -1,8 +1,9 @@
+from __future__ import annotations
+
 from trame.app.dataclass import get_instance
 
-from .color_opacity import ColorOpacity, create_default_coloropacity
 from .color_presets import ColorMaps, ColorPreset
-from .pipeline import Pipeline, SourceProxy
+from .pipeline import ColorOpacity, Pipeline, SourceProxy, create_default_color_opacity
 from .representations import (
     REPRESENTATIONS,
     OutlineProperties,
@@ -22,6 +23,6 @@ __all__ = [
     "SourceProxy",
     "VolumeProperties",
     "WindowInternalState",
-    "create_default_coloropacity",
+    "create_default_color_opacity",
     "get_instance",
 ]

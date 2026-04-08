@@ -88,7 +88,7 @@ class VolumeRepresentationUI(DivLayout):
 
                 v3.VCheckbox(
                     label="Custom Color Opacity",
-                    v_model="rep.CustomColoropacity",
+                    v_model="rep.use_internal_color_opacity",
                     density="comfortable",
                     hide_details=True,
                     flat=True,

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from collections.abc import Callable
 
 from loguru import logger
@@ -12,7 +14,7 @@ from trame.app.dataclass import (
 
 from tomviz_trame.app.data_model.pipeline import SourceProxy
 
-from .color_opacity import ColorOpacity, create_default_coloropacity
+from .pipeline import ColorOpacity, create_default_color_opacity
 from .view import WindowInternalState
 
 
@@ -30,73 +32,83 @@ class ViewMixin:
         self.view.render()
 
     def reset_camera(self, *_):
-        self.view.render()
+        self.view.reset_camera()
 
 
 # -----------------------------------------------------------------------------
 class ColorOpacityMixin:
+    """
+    color_opacity = Sync(ColorOpacity, has_dataclass=True)
+    use_internal_color_opacity
+    """
+
     def pre_init_color_opacity(self):
-        self.coloropacity_unwatch_0: Callable | None = None
-        self.coloropacity_unwatch_1: Callable | None = None
+        self._color_opacity_unwatch_0: Callable | None = None
+        self._color_opacity_unwatch_1: Callable | None = None
 
     def post_init_color_opacity(self):
-        self.coloropacity: ColorOpacity = create_default_coloropacity(self.input)
-
-    @watch("CustomColoropacity", eager=True)
-    def _on_custom_coloropacity_change(self, custom):
-        # unsubscribe from the current coloropacity
-        if self.coloropacity_unwatch_0 is not None:
-            self.coloropacity_unwatch_0()
-            self.coloropacity_unwatch_0 = None
-
-        if self.coloropacity_unwatch_1 is not None:
-            self.coloropacity_unwatch_1()
-            self.coloropacity_unwatch_1 = None
-
-        coloropacity: ColorOpacity | None = (
-            self.coloropacity if custom else self.input.coloropacity
+        self._internal_color_opacity: ColorOpacity = create_default_color_opacity(
+            self.input
         )
 
-        if coloropacity is None:
-            self.ColorOpacityId = ""
-            return
+    @property
+    def active_color_opacity_id(self):
+        return self.server.state.active_color_opacity_id
 
-        active_coloropacity_id = self.server.state.active_coloropacity_id
+    @active_color_opacity_id.setter
+    def active_color_opacity_id(self, value):
+        with self.server.state as s:
+            s.active_color_opacity_id = value
 
-        # Update active color opacity if already active
-        if active_coloropacity_id == self.ColorOpacityId:
-            with self.server.state as s:
-                s.active_coloropacity_id = coloropacity._id
+    @watch("use_internal_color_opacity", eager=True)
+    def _on_custom_color_opacity_change(self, use_internal):
+        # unsubscribe from the current color_opacity
+        if self._color_opacity_unwatch_0 is not None:
+            self._color_opacity_unwatch_0()
+            self._color_opacity_unwatch_0 = None
 
-        # Update current selection
-        self.ColorOpacityId = coloropacity._id
+        if self._color_opacity_unwatch_1 is not None:
+            self._color_opacity_unwatch_1()
+            self._color_opacity_unwatch_1 = None
 
-        self.coloropacity_unwatch_0 = coloropacity.watch(
+        active = (
+            self._internal_color_opacity if use_internal else self.input.color_opacity
+        )
+
+        if (
+            self.color_opacity
+            and self.active_color_opacity_id == self.color_opacity._id
+        ):
+            self.active_color_opacity_id = active._id
+
+        self.color_opacity = active
+
+        self._color_opacity_unwatch_0 = active.watch(
             ["active_data_array"],
-            self.on_coloropacity_active_array_change,
+            self.on_color_opacity_active_array_change,
         )
 
         # can this rerender happen automatically when the lut/pwf is modified?
-        self.coloropacity_unwatch_1 = coloropacity.watch(
+        self._color_opacity_unwatch_1 = active.watch(
             ["color_range", "opacities", "active_color_preset", "invert_color_preset"],
             self.render,
         )
 
-        self.on_coloropacity_active_array_change(coloropacity.active_data_array)
+        self.on_color_opacity_active_array_change(active.active_data_array)
 
         if self.proxy is None:
             return
 
         # Apply colors
-        self.proxy.LookupTable = coloropacity.lut
+        self.proxy.LookupTable = active.lut
 
         # Apply opacity (if available)
         if hasattr(self.proxy, "ScalarOpacityFunction"):
-            self.proxy.ScalarOpacityFunction = coloropacity.pwf
+            self.proxy.ScalarOpacityFunction = active.pwf
 
         self.render()
 
-    def on_coloropacity_active_array_change(self, active_data_array):
+    def on_color_opacity_active_array_change(self, active_data_array):
         if not active_data_array:
             return
 
@@ -109,9 +121,9 @@ class ColorOpacityMixin:
 # -----------------------------------------------------------------------------
 class OutlineProperties(ViewMixin, StateDataModel):
     # Core representation properties
+    proxy = ServerOnly(servermanager.Proxy | None)
     input = Sync(SourceProxy, has_dataclass=True)
     view = Sync(WindowInternalState, has_dataclass=True)
-    proxy = ServerOnly(servermanager.Proxy | None)
     label = Sync(str)
     name = Sync(str)
     icon = Sync(str)
@@ -134,16 +146,16 @@ class OutlineProperties(ViewMixin, StateDataModel):
 # -----------------------------------------------------------------------------
 class VolumeProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
     # Core representation properties
+    proxy = ServerOnly(servermanager.Proxy | None)
     input = Sync(SourceProxy, has_dataclass=True)
     view = Sync(WindowInternalState, has_dataclass=True)
-    proxy = ServerOnly(servermanager.Proxy | None)
     label = Sync(str)
     name = Sync(str)
     icon = Sync(str)
 
     # Color/Opacity properties
-    ColorOpacityId = Sync(str)  # id of the active coloropacity for this representation
-    CustomColoropacity = Sync(bool, False)  # use local/source coloropacity
+    color_opacity = Sync(ColorOpacity, has_dataclass=True)
+    use_internal_color_opacity = Sync(bool, False)
 
     # Volume specific
     Visibility = Sync(bool, False)
@@ -207,8 +219,8 @@ class SliceProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
     icon = Sync(str)
 
     # Color/Opacity properties
-    ColorOpacityId = Sync(str)  # id of the active coloropacity for this representation
-    CustomColoropacity = Sync(bool, False)  # use local/source coloropacity
+    color_opacity = Sync(ColorOpacity, has_dataclass=True)
+    use_internal_color_opacity = Sync(bool, False)
 
     # Slice specific
     Visibility = Sync(bool, False)

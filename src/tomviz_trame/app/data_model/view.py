@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from paraview import servermanager
 from trame.app.dataclass import (
     ServerOnly,

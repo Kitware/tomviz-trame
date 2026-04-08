@@ -1,7 +1,7 @@
 from trame.widgets import html
 from trame.widgets import vuetify3 as v3
 
-from tomviz_trame.app.ui.coloropacity import ColorOpacityEditor
+from tomviz_trame.app.ui.color_opacity import ColorOpacityEditor
 
 
 class ColorOpacitySection(html.Div):
@@ -11,10 +11,10 @@ class ColorOpacitySection(html.Div):
         with self:
             with v3.VBtn(
                 prepend_icon=(
-                    "show_coloropacity ? 'mdi-chevron-down' : 'mdi-chevron-up'",
+                    "show_color_opacity ? 'mdi-chevron-down' : 'mdi-chevron-up'",
                 ),
                 text="Color Opacity Map",
-                click="show_coloropacity = !show_coloropacity",
+                click="show_color_opacity = !show_color_opacity",
                 classes="w-100 text-none mb-1",
                 variant="tonal",
                 spaced="end",
@@ -26,9 +26,9 @@ class ColorOpacitySection(html.Div):
                     classes="border-thin overflow-hidden flex-fill pa-2 mb-2",
                     flat=True,
                     variant="flat",
-                    v_show=("show_coloropacity && active_coloropacity_id",),
+                    v_show=("show_color_opacity && active_color_opacity_id",),
                 ):
                     ColorOpacityEditor(
-                        coloropacity_instance="active_coloropacity_id",
+                        color_opacity_instance="active_color_opacity_id",
                         colormaps_instance="colormaps_id",
                     )

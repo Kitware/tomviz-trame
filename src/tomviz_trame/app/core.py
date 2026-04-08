@@ -1,7 +1,7 @@
 from trame.app import TrameApp
 from trame.decorators import life_cycle
 from trame.ui.vuetify3 import VAppLayout
-from trame.widgets import dataclass, dockview, html
+from trame.widgets import dockview, html
 from trame.widgets import paraview as pvw
 from trame.widgets import vuetify3 as v3
 
@@ -17,14 +17,11 @@ class Tomviz(TrameApp):
         self.server.enable_module(module)
         args = cli.configure(self.server.cli)
 
-        # Force dataclass initialization to v1
-        dataclass.initialize(self.server, version="v2")
-
         # Global helper
         self.ctx.pipeline = PipelineManager(server=self.server)
         self.ctx.colormaps = generate_colormaps(self.server)
         self.state.colormaps_id = self.ctx.colormaps._id
-        self.state.show_coloropacity = True
+        self.state.show_color_opacity = True
         self.ctx.operators = Operators(
             server=self.server,
             config_file=args.operators,

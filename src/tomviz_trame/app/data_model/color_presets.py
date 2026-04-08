@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from trame.app.dataclass import StateDataModel, Sync
 
 from tomviz_trame.app.utils import colors as util_colors

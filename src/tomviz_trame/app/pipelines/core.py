@@ -71,7 +71,7 @@ class PipelineManager(TrameComponent):
         self.state.active_view_id = None
         self.state.active_data_id = None
         self.state.active_representation_id = None
-        self.state.active_coloropacity_id = None
+        self.state.active_color_opacity_id = None
 
         self.tree.watch(["active_node"], self._on_active_change)
 
@@ -96,10 +96,8 @@ class PipelineManager(TrameComponent):
         dataset.proxy = reader
         dataset.update_info()
 
-        self.add_default_coloropacity(dataset._id)
+        self.add_default_color_opacity(dataset._id)
         self.add_default_representations(dataset._id, self.state.active_view_id)
-
-        # self.state.active_coloropacity_id = dataset.coloropacity
 
         data_model.get_instance(self.state.active_view_id).widget_view.reset_camera()
 
@@ -171,14 +169,12 @@ class PipelineManager(TrameComponent):
                 },
             )
 
-    def add_default_coloropacity(self, data_id: str):
+    def add_default_color_opacity(self, data_id: str):
         logger.debug("data_id: {}", data_id)
         data_obj: data_model.SourceProxy = data_model.get_instance(data_id)
 
-        if not data_obj.ColorOpacityId:
-            coloropacity = data_model.create_default_coloropacity(data_obj)
-            data_obj.coloropacity = coloropacity
-            data_obj.ColorOpacityId = coloropacity._id
+        if not data_obj.color_opacity:
+            data_obj.color_opacity = data_model.create_default_color_opacity(data_obj)
 
     def add_default_representations(self, data_id: str, view_id: str):
         self.add_representation(data_id, view_id, RepresentationType.OUTLINE.name)
@@ -217,36 +213,27 @@ class PipelineManager(TrameComponent):
 
     def _on_active_change(self, active_node: list[str]):
         logger.debug("active_node: {}", active_node)
-        if active_node:
-            obj = data_model.get_instance(active_node[0])
-            coloropacity_id = getattr(obj, "ColorOpacityId", "")
-            if isinstance(obj, data_model.SourceProxy):
-                with self.state as s:
+        with self.state as s:
+            if active_node:
+                obj = data_model.get_instance(active_node[0])
+                color_opacity = getattr(obj, "color_opacity", None)
+                s.active_color_opacity_id = color_opacity._id if color_opacity else ""
+                if isinstance(obj, data_model.SourceProxy):
                     s.active_data_id = active_node[0]
                     s.active_representation_id = None
                     s.property_templates = []
-                    s.active_coloropacity_id = coloropacity_id
-            elif isinstance(obj, data_model.REPRESENTATIONS):
-                # representation
-                with self.state as s:
-                    s.active_representation_id = active_node[0]
-                    s.active_data_id = obj.input._id
-                    s.active_view_id = obj.view._id
-                    s.active_coloropacity_id = coloropacity_id
-
+                elif isinstance(obj, data_model.REPRESENTATIONS):
                     rep_tpl = DYNAMIC_TEMPLATES.get(obj.name)
-                    if rep_tpl:
-                        s.property_templates = [rep_tpl]
-                    else:
-                        s.property_templates = []
-
-        else:
-            with self.state as s:
+                    s.active_data_id = obj.input._id
+                    s.active_representation_id = active_node[0]
+                    s.active_view_id = obj.view._id
+                    s.property_templates = [rep_tpl] if rep_tpl else []
+            else:
                 s.active_data_id = None
                 s.active_representation_id = None
                 s.active_view_id = None
                 s.property_templates = []
-                s.active_coloropacity_id = ""
+                s.active_color_opacity_id = ""
 
     def reset_color_range(self, rep_id):
         data_model.get_instance(rep_id).reset_color_range()
