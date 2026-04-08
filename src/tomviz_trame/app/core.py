@@ -1,7 +1,7 @@
 from trame.app import TrameApp
 from trame.decorators import life_cycle
 from trame.ui.vuetify3 import VAppLayout
-from trame.widgets import dockview, html
+from trame.widgets import dataclass, dockview, html
 from trame.widgets import paraview as pvw
 from trame.widgets import vuetify3 as v3
 
@@ -16,6 +16,9 @@ class Tomviz(TrameApp):
         super().__init__(server, client_type="vue3", ctx_name="tomviz")
         self.server.enable_module(module)
         args = cli.configure(self.server.cli)
+
+        # Force dataclass initialization to v1
+        dataclass.initialize(self.server, version="v2")
 
         # Global helper
         self.ctx.pipeline = PipelineManager(server=self.server)
@@ -47,6 +50,7 @@ class Tomviz(TrameApp):
             ui.reload(ui)
 
         # Create UI for all representation types
+
         ui.initialize_dynamic_ui(self.server)
         pvw.initialize(self.server)
 
@@ -96,6 +100,6 @@ class Tomviz(TrameApp):
                     active_panel=(self.ctx.pipeline.activate_panel, "[$event]"),
                 )
 
-                # Add a view if none defined
-                if not self.ctx.pipeline.views:
-                    self.ctx.pipeline.add_view()
+        # Add a view if none defined
+        if not self.ctx.pipeline.views:
+            self.ctx.pipeline.add_view()

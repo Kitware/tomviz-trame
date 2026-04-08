@@ -24,11 +24,9 @@ class PropertiesSections(html.Div):
                         with dataclass.Provider(name="view", instance=("rep.View",)):
                             v3.VIcon("mdi-stop", color=("view.color",))
             with v3.VExpandTransition():
-                with v3.Template(
+                client.ServerTemplate(
                     v_for="tpl in property_templates",
                     key="tpl",
-                ):
-                    client.ServerTemplate(
-                        name=("tpl",),
-                        v_show=("show_properties", True),
-                    )
+                    name=("tpl",),
+                    v_show=("show_properties", True),
+                )

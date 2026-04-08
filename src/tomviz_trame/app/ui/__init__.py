@@ -12,7 +12,6 @@ from . import (
     toolbar,
     utils,
 )
-
 from .coloropacity import ColorOpacityEditor
 from .drawer_coloropacity import ColorOpacitySection
 from .drawer_info import DataInformationSection

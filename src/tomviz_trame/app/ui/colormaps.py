@@ -1,11 +1,11 @@
 import base64
 
 from paraview import simple
-from trame_dataclass.core import StateDataModel
 from vtkmodules.vtkCommonCore import vtkUnsignedCharArray
 from vtkmodules.vtkCommonDataModel import vtkImageData
 from vtkmodules.vtkIOImage import vtkPNGWriter
 
+from tomviz_trame.app import data_model
 from tomviz_trame.app.utils.colors import Color
 
 COLOR_PALETTE = [
@@ -23,16 +23,6 @@ def color_to_float_rgb(color: str) -> Color:
     green = int(color[3:5], 16)
     blue = int(color[5:7], 16)
     return (red / 255, green / 255, blue / 255)
-
-
-class ColorPreset(StateDataModel):
-    name: str
-    colors: list[Color]
-    imgs: tuple[str, str] = ("", "")  # normal, inverted
-
-
-class ColorMaps(StateDataModel):
-    presets: dict[str, ColorPreset]
 
 
 def generate_colormaps(server):
@@ -87,12 +77,12 @@ def generate_colormaps(server):
         color_maps[name] = {
             "name": name,
             "colors": colors,
-            "imgs": imgs,
+            "imgs": tuple(imgs),
         }
 
     server.state.palette = COLOR_PALETTE
 
-    return ColorMaps(
+    return data_model.ColorMaps(
         server,
-        presets={k: ColorPreset(server, **v) for k, v in color_maps.items()},
+        presets={k: data_model.ColorPreset(server, **v) for k, v in color_maps.items()},
     )
