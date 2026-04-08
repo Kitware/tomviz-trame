@@ -14,15 +14,7 @@ class OutlineRepresentation(TrameComponent):
         source_id = source_proxy._id
         view_id, view_proxy = view_info
         super().__init__(server=pipeline_manager.server)
-        self.props = data_model.OutlineProperties(
-            self.server,
-            Input=source_id,
-            Label=RepresentationType.OUTLINE.label,
-            Type=RepresentationType.OUTLINE.name,
-            Icon=RepresentationType.OUTLINE.icon,
-            View=view_id,
-            source=source_proxy,
-        )
+
         self._pm = pipeline_manager
         self.proxy = servermanager._getPyProxy(
             self._pm.pxm.NewProxy(
@@ -34,9 +26,15 @@ class OutlineRepresentation(TrameComponent):
         self.proxy.Input = source_proxy.proxy
         view_proxy.Representations = [*view_proxy.Representations, self.proxy]
 
-        self.props.proxy = self.proxy
-        self.props.pull()
-        self.props.reset_camera()
+        self.props = data_model.OutlineProperties(
+            self.server,
+            Input=source_id,
+            Label=RepresentationType.OUTLINE.label,
+            Type=RepresentationType.OUTLINE.name,
+            Icon=RepresentationType.OUTLINE.icon,
+            View=view_id,
+            proxy=self.proxy,
+        )
 
 
 RepresentationType.OUTLINE.register_class(OutlineRepresentation)
