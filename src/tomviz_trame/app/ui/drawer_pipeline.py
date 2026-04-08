@@ -56,6 +56,19 @@ class PipelineSection(html.Div):
                                             title=("item.name",),
                                             value=("item._id",),
                                         ):
+                                            with v3.Template(v_slot_append=True):
+                                                v3.VBtn(
+                                                    # icon="mdi-flask-plus-outline",
+                                                    # icon="mdi-beaker-plus-outline",
+                                                    # icon="mdi-layers-plus",
+                                                    icon="mdi-shape-plus-outline",
+                                                    ripple=False,
+                                                    size="small",
+                                                    density="compact",
+                                                    variant="plain",
+                                                    classes="ml-1",
+                                                    v_on_click_prevent_stop="select_operator = true",
+                                                )
                                             with v3.Template(v_slot_prepend=True):
                                                 v3.VBtn(
                                                     icon=(

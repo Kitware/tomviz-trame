@@ -81,8 +81,15 @@ class Tomviz(TrameApp):
                 permanent=True,
             ):
                 with html.Div(
+                    v_if=("select_operator", False),
                     classes="px-2 pt-2 d-flex flex-column",
                     style="max-height: calc(100vh - 48px)",
+                ):
+                    ui.OperatorSelection()
+                with html.Div(
+                    classes="px-2 pt-2 d-flex flex-column",
+                    style="max-height: calc(100vh - 48px)",
+                    v_else=True,
                 ):
                     ui.PipelineSection()
                     ui.ColorOpacitySection()

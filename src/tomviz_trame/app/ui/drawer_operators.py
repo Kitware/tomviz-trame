@@ -1,0 +1,125 @@
+from trame.widgets import html
+from trame.widgets import vuetify3 as v3
+
+
+class OperatorSelection(html.Div):
+    def __init__(self):
+        super().__init__()
+
+        self.state.setdefault("operator_favorites", False)
+        self.state.setdefault("operator_favorite_count", 3)
+        self.state.available_operators = [
+            {
+                "title": "Data Transforms",
+                "children": [],
+                "count": 40,
+            },
+            {
+                "title": "Segmentation",
+                "children": [],
+                "count": 14,
+            },
+            {
+                "title": "Tomography",
+                "children": [
+                    {"title": "Pre-processing", "count": 6, "children": []},
+                    {"title": "Alignment", "count": 3, "children": []},
+                    {
+                        "title": "Reconstruction",
+                        "count": 2,
+                        "children": [
+                            {
+                                "title": "Simple Black Projection (C++)",
+                                "icon": "mdi-image-filter-black-white",
+                                "fav": False,
+                            },
+                            {
+                                "title": "Custom ITK transform",
+                                "icon": "mdi-transfer",
+                                "fav": True,
+                            },
+                        ],
+                    },
+                ],
+                "count": 36,
+            },
+        ]
+
+        with self:
+            v3.VBtn(
+                prepend_icon="mdi-chevron-left",
+                text="Operators",
+                click="select_operator = false",
+                classes="w-100 text-none mb-1",
+                variant="tonal",
+                spaced="end",
+            )
+
+            with v3.VCard(
+                classes="border-thin overflow-auto flex-fill mb-2",
+                flat=True,
+                variant="flat",
+            ):
+                with html.Div(classes="d-flex pa-2 ga-2 align-center"):
+                    v3.VTextField(
+                        placeholder="Search operators...",
+                        v_model=("operator_filter", ""),
+                        prepend_inner_icon="mdi-magnify",
+                        variant="outlined",
+                        density="compact",
+                        hide_details=True,
+                    )
+                    v3.VBtn(
+                        classes="rounded",
+                        icon="mdi-plus",
+                        color="primary",
+                        density="comfortable",
+                        flat=True,
+                    )
+                with html.Div(
+                    classes="d-flex mx-2 pa-1 ga-2 align-center justify-space-around bg-surface-light rounded"
+                ):
+                    v3.VBtn(
+                        "All Operators",
+                        variant=("operator_favorites ? 'plain' : 'flat'",),
+                        classes="text-none flex-fill",
+                        click="operator_favorites = false",
+                        density="comfortable",
+                    )
+                    v3.VBtn(
+                        "Favorites ({{ operator_favorite_count }})",
+                        prepend_icon="mdi-star",
+                        variant=("operator_favorites ? 'flat' : 'plain'",),
+                        classes="text-none flex-fill",
+                        click="operator_favorites = true",
+                        density="comfortable",
+                    )
+
+                with v3.VTreeview(
+                    v_model_opened=("operator_tree_opened", []),
+                    items=("available_operators", []),
+                    density="compact",
+                    item_value="title",
+                    activatable=True,
+                    open_on_click=True,
+                    indent=20,
+                    hide_actions=True,
+                ):
+                    with v3.Template(v_slot_prepend="{ item, isOpen }"):
+                        v3.VIcon(
+                            v_if="item.children",
+                            icon=("isOpen ? 'mdi-folder-open' : 'mdi-folder'",),
+                        )
+                        v3.VIcon(v_else=True, icon=("item.icon",))
+                    with v3.Template(v_slot_append="{ item }"):
+                        v3.VChip(
+                            "{{ item.count }}",
+                            v_if="item.children && item.count",
+                            size="x-small",
+                        )
+                        v3.VIcon(
+                            icon=("item.fav ? 'mdi-heart':'mdi-heart-outline'",),
+                            color=("item.fav ? 'red' : null",),
+                            v_if="!item.children",
+                            v_on_click_prevent="item.fav = !item.fav",
+                        )
