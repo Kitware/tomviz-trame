@@ -1,0 +1,10 @@
+{
+  "externalCompatible": false,
+  "results": [
+    {
+      "name": "molecule",
+      "label": "Reconstructed atomic positions",
+      "type": "molecule"
+    }
+  ]
+}

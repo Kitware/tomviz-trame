@@ -7,43 +7,9 @@ class OperatorSelection(html.Div):
         super().__init__()
 
         self.state.setdefault("operator_favorites", False)
-        self.state.setdefault("operator_favorite_count", 3)
-        self.state.available_operators = [
-            {
-                "title": "Data Transforms",
-                "children": [],
-                "count": 40,
-            },
-            {
-                "title": "Segmentation",
-                "children": [],
-                "count": 14,
-            },
-            {
-                "title": "Tomography",
-                "children": [
-                    {"title": "Pre-processing", "count": 6, "children": []},
-                    {"title": "Alignment", "count": 3, "children": []},
-                    {
-                        "title": "Reconstruction",
-                        "count": 2,
-                        "children": [
-                            {
-                                "title": "Simple Black Projection (C++)",
-                                "icon": "mdi-image-filter-black-white",
-                                "fav": False,
-                            },
-                            {
-                                "title": "Custom ITK transform",
-                                "icon": "mdi-transfer",
-                                "fav": True,
-                            },
-                        ],
-                    },
-                ],
-                "count": 36,
-            },
-        ]
+
+        # debug
+        self.state.select_operator = True
 
         with self:
             v3.VBtn(
@@ -95,15 +61,22 @@ class OperatorSelection(html.Div):
                         density="comfortable",
                     )
 
-                with v3.VTreeview(
-                    v_model_opened=("operator_tree_opened", []),
-                    items=("available_operators", []),
-                    density="compact",
-                    item_value="title",
-                    activatable=True,
-                    open_on_click=True,
-                    indent=20,
-                    hide_actions=True,
+                with (
+                    self.ctx.operators.root_node.provide_as("operator_root_node"),
+                    v3.VTreeview(
+                        v_model_opened=("operator_tree_opened", []),
+                        items=("operator_root_node.children",),
+                        density="compact",
+                        item_value="title",
+                        activatable=True,
+                        open_on_click=True,
+                        indent=20,
+                        hide_actions=True,
+                        search=(
+                            "operator_favorites ? `${operator_filter} ::fav::` : operator_filter",
+                        ),
+                        custom_filter=("utils.tomviz.treeFilter",),
+                    ),
                 ):
                     with v3.Template(v_slot_prepend="{ item, isOpen }"):
                         v3.VIcon(
@@ -118,8 +91,8 @@ class OperatorSelection(html.Div):
                             size="x-small",
                         )
                         v3.VIcon(
-                            icon=("item.fav ? 'mdi-heart':'mdi-heart-outline'",),
-                            color=("item.fav ? 'red' : null",),
+                            icon=("item.favorite ? 'mdi-heart':'mdi-heart-outline'",),
+                            color=("item.favorite ? 'red' : null",),
                             v_if="!item.children",
-                            v_on_click_prevent="item.fav = !item.fav",
+                            v_on_click_prevent="item.favorite = !item.favorite",
                         )

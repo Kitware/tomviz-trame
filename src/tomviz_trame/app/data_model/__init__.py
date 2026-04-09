@@ -3,6 +3,7 @@ from __future__ import annotations
 from trame.app.dataclass import get_instance
 
 from .color_presets import ColorMaps, ColorPreset
+from .operators import OperatorNode, OperatorTreeNode
 from .pipeline import ColorOpacity, Pipeline, SourceProxy, create_default_color_opacity
 from .representations import (
     REPRESENTATIONS,
@@ -17,6 +18,8 @@ __all__ = [
     "ColorMaps",
     "ColorOpacity",
     "ColorPreset",
+    "OperatorNode",
+    "OperatorTreeNode",
     "OutlineProperties",
     "Pipeline",
     "SliceProperties",
