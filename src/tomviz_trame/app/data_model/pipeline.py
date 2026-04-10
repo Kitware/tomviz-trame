@@ -41,7 +41,7 @@ class SourceProxy(StateDataModel):
     )  # { view_id: [rep_id, ...] }
 
     # Downstream pipelines
-    pipelines = Sync(list[str], list)  # !(str -> SourceProxy) [source_proxy_id, ...]
+    pipelines = Sync(list, list, has_dataclass=True)  # ["SourceProxy" | "Operator"]
 
     # Server only fields
     proxy = ServerOnly(servermanager.Proxy | None)
@@ -199,6 +199,10 @@ class ColorOpacity(StateDataModel):
         array = self.source.proxy.GetPointDataInformation().GetArray(
             self.active_data_array
         )
+        # FIXME - may need to flush pipeline
+        if array is None:
+            return
+
         data_range = array.GetRange()
         v_min, v_max = data_range
         step = max((v_max - v_min) / 255, 1)

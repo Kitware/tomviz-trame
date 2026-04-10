@@ -9,7 +9,7 @@ dependencies = [
     "trame>=3.12",
     "trame-vuetify",
     "trame-vtk",
-    "trame-dataclass",
+    "trame-dataclass>=2.0.5",
     "trame-dockview",
     "trame-color-opacity-editor",
     "loguru",
@@ -93,6 +93,27 @@ ignore = [
 isort.required-imports = []
 
 [tool.ruff.lint.per-file-ignores]
+"src/tomviz/**" = [# FIXME
+    "T201",
+    "RET",
+    "RUF",
+    "EM",
+    "UP",
+    "NPY",
+    "SIM",
+    "ARG",
+    "EXE",
+    "PTH",
+    "B",
+    "PT",
+    "F821",
+    "C416",
+    "PD",
+    "PGH004",
+    "PLR1714",
+    "E741",
+    "PLW0127",
+]
 "tests/**" = ["T20"]
 "noxfile.py" = ["T20"]
 "src/**" = ["SIM117"]

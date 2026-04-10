@@ -1,0 +1,65 @@
+import tomviz.operators
+
+JSON = {
+    "name": "DefaultITKTransform",
+    "label": "Default ITK Transform",
+    "description": "Example ITK filter that adds 10 to each voxel value.",
+    "tags": ["ITK", "example", "default", "transform"],
+    "path": ["Data Transforms", "Data Management"],
+    "parameters": [],
+}
+
+
+class DefaultITKTransform(tomviz.operators.CancelableOperator):
+    def transform(self, dataset):
+        """Define this method for Python operators that transform the input
+        array. This example uses an ITK filter to add 10 to each voxel value."""
+
+        # Try imports to make sure we have everything that is needed
+        try:
+            import itk
+
+            from tomviz import itkutils
+        except Exception as exc:
+            print("Could not import necessary module(s)")
+            raise exc
+
+        self.progress.value = 0
+        self.progress.maximum = 100
+
+        # Add a try/except around the ITK portion. ITK exceptions are
+        # passed up to the Python layer, so we can at least report what
+        # went wrong with the script, e.g., unsupported image type.
+        try:
+            self.progress.value = 0
+            self.progress.message = "Converting data to ITK image"
+
+            # Get the ITK image
+            itk_image = itkutils.dataset_to_itk_image(dataset)
+            itk_input_image_type = type(itk_image)
+            self.progress.value = 30
+            self.progress.message = "Running filter"
+
+            # ITK filter
+            filter = itk.AddImageFilter[
+                itk_input_image_type,  # Input 1
+                itk_input_image_type,  # Input 2
+                itk_input_image_type,
+            ].New()  # Output
+            filter.SetInput1(itk_image)
+            filter.SetConstant2(10)
+            itkutils.observe_filter_progress(self, filter, 30, 70)
+
+            try:
+                filter.Update()
+            except RuntimeError:  # Exception thrown when ITK filter is aborted
+                return
+
+            self.progress.message = "Saving results"
+
+            itkutils.set_itk_image_on_dataset(filter.GetOutput(), dataset)
+
+            self.progress.value = 100
+        except Exception as exc:
+            print("Problem encountered while running %s" % self.__class__.__name__)
+            raise exc

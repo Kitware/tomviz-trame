@@ -11,6 +11,7 @@ from trame.decorators import trigger
 
 from tomviz_trame.app import data_model, module, ui
 from tomviz_trame.app.ui.dynamic import DYNAMIC_TEMPLATES
+from tomviz_trame.paraview import load_plugins
 
 
 class RepresentationType(Enum):
@@ -77,6 +78,8 @@ class PipelineManager(TrameComponent):
 
         if self.server.hot_reload:
             self.server.controller.on_server_reload.add(self.refresh_views_later)
+
+        load_plugins(ns=globals())
 
     def __del__(self):
         self.tree.clear_watchers()
@@ -211,6 +214,19 @@ class PipelineManager(TrameComponent):
 
         return None
 
+    def add_operator(self, data_id: str, operator_name: str, icon: str):
+        input = data_model.get_instance(data_id)
+        operator_proxy = simple.TomvizVolumeTransform(Input=input.proxy)
+        operator_filter = data_model.Operator(
+            self.server,
+            name=operator_name,
+            proxy=operator_proxy,
+            color_opacity=data_model.create_default_color_opacity(input),
+            icon=icon,
+        )
+
+        input.pipelines = [*input.pipelines, operator_filter]
+
     def _on_active_change(self, active_node: list[str]):
         logger.debug("active_node: {}", active_node)
         with self.state as s:
@@ -218,7 +234,7 @@ class PipelineManager(TrameComponent):
                 obj = data_model.get_instance(active_node[0])
                 color_opacity = getattr(obj, "color_opacity", None)
                 s.active_color_opacity_id = color_opacity._id if color_opacity else ""
-                if isinstance(obj, data_model.SourceProxy):
+                if isinstance(obj, data_model.SourceProxy | data_model.Operator):
                     s.active_data_id = active_node[0]
                     s.active_representation_id = None
                     s.property_templates = []

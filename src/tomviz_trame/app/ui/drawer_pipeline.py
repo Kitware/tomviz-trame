@@ -56,6 +56,19 @@ class PipelineSection(html.Div):
                                             title=("item.name",),
                                             value=("item._id",),
                                         ):
+                                            with v3.Template(v_slot_append=True):
+                                                v3.VBtn(
+                                                    # icon="mdi-flask-plus-outline",
+                                                    # icon="mdi-beaker-plus-outline",
+                                                    # icon="mdi-layers-plus",
+                                                    icon="mdi-shape-plus-outline",
+                                                    ripple=False,
+                                                    size="small",
+                                                    density="compact",
+                                                    variant="plain",
+                                                    classes="ml-1",
+                                                    v_on_click_prevent_stop="select_operator = true; active_data_id = item._id;",
+                                                )
                                             with v3.Template(v_slot_prepend=True):
                                                 v3.VBtn(
                                                     icon=(
@@ -73,6 +86,40 @@ class PipelineSection(html.Div):
                                                 v_if="item.expand_pipeline",
                                                 classes="",
                                             ):
+                                                v3.VLabel("{{ pipeline.active_node }}")
+                                                with v3.VTreeview(
+                                                    v_model_activated=(
+                                                        "pipeline.active_node",
+                                                    ),
+                                                    items=("item.pipelines",),
+                                                    density="compact",
+                                                    item_value="_id",
+                                                    item_title="name",
+                                                    item_children="pipelines",
+                                                    activatable=True,
+                                                    open_on_click=True,
+                                                    indent=10,
+                                                    hide_actions=True,
+                                                    open_all=True,
+                                                ):
+                                                    with v3.Template(
+                                                        v_slot_prepend="{ item }"
+                                                    ):
+                                                        v3.VIcon(
+                                                            icon=("item.icon",),
+                                                        )
+                                                    with v3.Template(
+                                                        v_slot_append="{ item }"
+                                                    ):
+                                                        v3.VBtn(
+                                                            icon="mdi-shape-plus-outline",
+                                                            ripple=False,
+                                                            size="small",
+                                                            density="compact",
+                                                            variant="plain",
+                                                            classes="ml-1",
+                                                            v_on_click_prevent_stop="select_operator = true; active_data_id = item._id;",
+                                                        )
                                                 with v3.Template(
                                                     v_for="representations, view_id in item.representations",
                                                     key="view_id",
