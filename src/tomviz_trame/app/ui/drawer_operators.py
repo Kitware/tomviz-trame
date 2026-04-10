@@ -1,4 +1,4 @@
-from trame.widgets import html
+from trame.widgets import dataclass, html
 from trame.widgets import vuetify3 as v3
 
 
@@ -7,9 +7,6 @@ class OperatorSelection(html.Div):
         super().__init__()
 
         self.state.setdefault("operator_favorites", False)
-
-        # debug
-        self.state.select_operator = True
 
         with self:
             v3.VBtn(
@@ -21,11 +18,18 @@ class OperatorSelection(html.Div):
                 spaced="end",
             )
 
-            with v3.VCard(
-                classes="border-thin overflow-auto flex-fill mb-2",
-                flat=True,
-                variant="flat",
+            with (
+                dataclass.Provider(name="active_input", instance=("active_data_id",)),
+                v3.VCard(
+                    classes="border-thin overflow-auto flex-fill mb-2",
+                    flat=True,
+                    variant="flat",
+                ),
             ):
+                v3.VLabel(
+                    "{{ active_input.name }}",
+                    classes="text-subtitle-2 text-truncate mx-2 mt-2",
+                )
                 with html.Div(classes="d-flex pa-2 ga-2 align-center"):
                     v3.VTextField(
                         placeholder="Search operators...",
@@ -34,8 +38,10 @@ class OperatorSelection(html.Div):
                         variant="outlined",
                         density="compact",
                         hide_details=True,
+                        clearable=True,
                     )
                     v3.VBtn(
+                        disabled=("operator_activated.length === 0",),
                         classes="rounded",
                         icon="mdi-plus",
                         color="primary",
@@ -43,7 +49,7 @@ class OperatorSelection(html.Div):
                         flat=True,
                     )
                 with html.Div(
-                    classes="d-flex mx-2 pa-1 ga-2 align-center justify-space-around bg-surface-light rounded"
+                    classes="d-flex mx-2 pa-1 ga-2 align-center justify-space-around bg-surface-light rounded",
                 ):
                     v3.VBtn(
                         "All Operators",
@@ -63,8 +69,12 @@ class OperatorSelection(html.Div):
 
                 with (
                     self.ctx.operators.root_node.provide_as("operator_root_node"),
+                    html.Div(
+                        style="height: calc(100vh - 14.8rem)",
+                        classes="overflow-scroll mt-2",
+                    ),
                     v3.VTreeview(
-                        v_model_opened=("operator_tree_opened", []),
+                        v_model_activated=("operator_activated", []),
                         items=("operator_root_node.children",),
                         density="compact",
                         item_value="title",

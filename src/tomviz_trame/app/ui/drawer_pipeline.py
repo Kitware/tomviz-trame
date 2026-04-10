@@ -67,7 +67,7 @@ class PipelineSection(html.Div):
                                                     density="compact",
                                                     variant="plain",
                                                     classes="ml-1",
-                                                    v_on_click_prevent_stop="select_operator = true",
+                                                    v_on_click_prevent_stop="select_operator = true; active_data_id = item._id;",
                                                 )
                                             with v3.Template(v_slot_prepend=True):
                                                 v3.VBtn(

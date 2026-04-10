@@ -1,4 +1,10 @@
+from typing import Self
+
+from paraview import servermanager
 from trame.app.dataclass import StateDataModel, Sync, watch
+from trame_dataclass.v2 import ServerOnly
+
+from .pipeline import SourceProxy
 
 
 class OperatorTreeNode(StateDataModel):
@@ -27,3 +33,10 @@ class OperatorNode(StateDataModel):
     @watch("favorite")
     def _on_fav(self, favorite):
         self.server.controller.update_favorite_operator(self.name, favorite)
+
+
+class Operator(StateDataModel):
+    name = Sync(str)
+    input = Sync(Self | SourceProxy, has_dataclass=True)
+    config = Sync(dict, dict, client_deep_reactive=True)
+    proxy = ServerOnly(servermanager.Proxy | None)
