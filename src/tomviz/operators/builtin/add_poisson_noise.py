@@ -6,8 +6,8 @@ JSON = {
     "name": "AddPoissonNoise",
     "label": "Add Poisson Noise to Tilt Images",
     "description": "Add Poisson noise to tilt series. The number of counts (N) per tilt image can be specified below. The signal-to-noise ratio is square root of N.",
-    "tags": [],
-    "path": [],
+    "tags": ["noise", "poisson", "tilt series", "simulation", "SNR", "photon"],
+    "path": ["Tomography", "Simulation & Demonstrations"],
     "parameters": [
         {
             "name": "N",

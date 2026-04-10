@@ -4,6 +4,15 @@ from scipy import ndimage
 import tomviz.operators
 from tomviz import utils
 
+JSON = {
+    "name": "AutoTiltAxisRotationAlignment",
+    "label": "Tilt Axis Rotation Alignment (Auto)",
+    "description": "Automatically align the tilt axis to the horizontal direction (x-axis) using FFT analysis.",
+    "tags": ["alignment", "tilt axis", "rotation", "automatic", "FFT"],
+    "path": ["Tomography", "Alignment"],
+    "parameters": [],
+}
+
 
 class AutoTiltAxisRotationAlignOperator(tomviz.operators.CancelableOperator):
     def transform(self, dataset):

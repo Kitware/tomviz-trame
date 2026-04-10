@@ -2,6 +2,17 @@
   "name": "PoreSizeDistribution",
   "label": "Continuous Pore Size Distribution",
   "description": "Continuous Pore Size Distribution calculation",
+  "path": [
+    "Data Transforms",
+    "Material Analysis"
+  ],
+  "tags": [
+    "pore",
+    "size distribution",
+    "material",
+    "porosity",
+    "analysis"
+  ],
   "parameters": [
     {
       "name": "threshold",

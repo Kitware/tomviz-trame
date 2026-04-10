@@ -1,4 +1,14 @@
 {
+  "path": [
+    "Data Transforms",
+    "Material Analysis"
+  ],
+  "tags": [
+    "molecule",
+    "atomic",
+    "structure",
+    "visualization"
+  ],
   "externalCompatible": false,
   "results": [
     {

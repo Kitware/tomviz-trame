@@ -1,3 +1,13 @@
+JSON = {
+    "name": "HannWindow3D",
+    "label": "Hann Window",
+    "description": "Apply a 3D Hann window filter to the dataset.",
+    "tags": ["hann", "hanning", "window", "apodization", "FFT"],
+    "path": ["Data Transforms", "Math Operations"],
+    "parameters": [],
+}
+
+
 def transform(dataset):
     import numpy as np
 

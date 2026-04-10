@@ -2,6 +2,15 @@ import tomviz.operators
 
 NUMBER_OF_CHUNKS = 10
 
+JSON = {
+    "name": "InvertData",
+    "label": "Invert Data",
+    "description": "Invert data by computing max - value + min for each voxel.",
+    "tags": ["invert", "negate", "flip", "contrast", "math"],
+    "path": ["Data Transforms", "Math Operations"],
+    "parameters": [],
+}
+
 
 class InvertOperator(tomviz.operators.CancelableOperator):
     def transform(self, dataset):

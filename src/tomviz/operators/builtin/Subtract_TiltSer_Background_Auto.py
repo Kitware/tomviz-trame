@@ -1,3 +1,13 @@
+JSON = {
+    "name": "Subtract_TiltSer_Background_Auto",
+    "label": "Background Subtraction (Auto)",
+    "description": "Subtract background from tilt images by finding the histogram peak as background level.",
+    "tags": ["background", "subtraction", "automatic", "histogram", "tilt series", "pre-processing"],
+    "path": ["Tomography", "Pre-processing"],
+    "parameters": [],
+}
+
+
 def transform(dataset):
     """
     For each tilt image, the method calculates its histogram

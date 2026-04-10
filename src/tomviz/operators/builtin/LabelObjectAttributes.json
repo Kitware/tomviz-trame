@@ -2,6 +2,19 @@
   "name": "LabelObjectAttributes",
   "label": "Label Object Attributes",
   "description": "Creates a child dataset containing attributes of labeled objects in a labeled dataset. The input dataset is unmodified.",
+  "path": [
+    "Segmentation",
+    "Label Analysis"
+  ],
+  "tags": [
+    "label",
+    "attributes",
+    "segmentation",
+    "analysis",
+    "volume",
+    "surface area",
+    "measurements"
+  ],
   "externalCompatible": false,
   "results": [
     {

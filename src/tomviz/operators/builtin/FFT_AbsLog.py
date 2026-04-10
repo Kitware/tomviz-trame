@@ -5,6 +5,15 @@
 #
 # WARNING: Be patient! Large datasets may take a while.
 
+JSON = {
+    "name": "FFT_AbsLog",
+    "label": "FFT (abs log)",
+    "description": "Compute the 3D Fourier transform and return the normalized log intensity.",
+    "tags": ["FFT", "fourier", "frequency", "log", "intensity", "spectral"],
+    "path": ["Data Transforms", "Math Operations"],
+    "parameters": [],
+}
+
 
 def transform(dataset):
     import numpy as np

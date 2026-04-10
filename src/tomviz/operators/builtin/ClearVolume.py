@@ -1,5 +1,14 @@
 from tomviz.utils import apply_to_each_array
 
+JSON = {
+    "name": "ClearVolume",
+    "label": "Clear Subvolume",
+    "description": "Set a specified region of the volume to zero.",
+    "tags": ["clear", "subvolume", "zero", "region", "mask"],
+    "path": ["Data Transforms", "Volume Manipulation"],
+    "parameters": [],
+}
+
 
 @apply_to_each_array
 def transform(dataset, XRANGE=None, YRANGE=None, ZRANGE=None):

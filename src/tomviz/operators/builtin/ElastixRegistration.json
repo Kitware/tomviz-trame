@@ -2,6 +2,17 @@
   "name": "elastix_registration",
   "label": "Elastix Registration",
   "description": "Perform volume registration between two volumes, one moving, and one fixed, through the use of ITKElastix.",
+  "path": [
+    "Data Transforms",
+    "Volume Manipulation"
+  ],
+  "tags": [
+    "registration",
+    "elastix",
+    "alignment",
+    "deformation",
+    "ITK"
+  ],
   "externalCompatible": false,
   "parameters": [
     {
@@ -38,10 +49,18 @@
       "type": "enumeration",
       "default": 1,
       "options": [
-        { "NearestNeighborInterpolator": "NearestNeighborInterpolator" },
-        { "LinearInterpolator": "LinearInterpolator" },
-        { "BSplineInterpolator": "BSplineInterpolator" },
-        { "BSplineInterpolatorFloat": "BSplineInterpolatorFloat" }
+        {
+          "NearestNeighborInterpolator": "NearestNeighborInterpolator"
+        },
+        {
+          "LinearInterpolator": "LinearInterpolator"
+        },
+        {
+          "BSplineInterpolator": "BSplineInterpolator"
+        },
+        {
+          "BSplineInterpolatorFloat": "BSplineInterpolatorFloat"
+        }
       ]
     },
     {
@@ -62,9 +81,15 @@
         {
           "FinalNearestNeighborInterpolator": "FinalNearestNeighborInterpolator"
         },
-        { "FinalLinearInterpolator": "FinalLinearInterpolator" },
-        { "FinalBSplineInterpolator": "FinalBSplineInterpolator" },
-        { "FinalBSplineInterpolatorFloat": "FinalBSplineInterpolatorFloat" }
+        {
+          "FinalLinearInterpolator": "FinalLinearInterpolator"
+        },
+        {
+          "FinalBSplineInterpolator": "FinalBSplineInterpolator"
+        },
+        {
+          "FinalBSplineInterpolatorFloat": "FinalBSplineInterpolatorFloat"
+        }
       ]
     },
     {

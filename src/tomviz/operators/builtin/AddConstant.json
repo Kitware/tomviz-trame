@@ -2,6 +2,17 @@
   "name": "AddConstant",
   "label": "Add Constant",
   "description": "Add a constant value to each voxel in the dataset.",
+  "path": [
+    "Data Transforms",
+    "Math Operations"
+  ],
+  "tags": [
+    "math",
+    "arithmetic",
+    "addition",
+    "constant",
+    "voxel"
+  ],
   "parameters": [
     {
       "name": "constant",

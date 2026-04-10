@@ -2,6 +2,17 @@
   "name": "WienerFilter",
   "label": "Wiener Filter",
   "description": "Apply a Wiener filter to 3D volumetric dataset or stack of STEM projections. The standard deviations can be specified in each direction (x, y, z).",
+  "path": [
+    "Data Transforms",
+    "Filters & Smoothing"
+  ],
+  "tags": [
+    "wiener",
+    "filter",
+    "deconvolution",
+    "restoration",
+    "denoise"
+  ],
   "parameters": [
     {
       "name": "SX",

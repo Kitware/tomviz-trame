@@ -2,6 +2,17 @@
   "name": "DeleteSlices",
   "label": "Delete Slices",
   "description": "Delete slices, including associated tilt angles, from a dataset",
+  "path": [
+    "Data Transforms",
+    "Volume Manipulation"
+  ],
+  "tags": [
+    "delete",
+    "slices",
+    "remove",
+    "volume",
+    "crop"
+  ],
   "parameters": [
     {
       "name": "firstSlice",
@@ -27,7 +38,17 @@
       "description": "Axis along which to delete slices",
       "type": "enumeration",
       "default": 2,
-      "options": [{ "X": 0 }, { "Y": 1 }, { "Z": 2 }]
+      "options": [
+        {
+          "X": 0
+        },
+        {
+          "Y": 1
+        },
+        {
+          "Z": 2
+        }
+      ]
     }
   ]
 }

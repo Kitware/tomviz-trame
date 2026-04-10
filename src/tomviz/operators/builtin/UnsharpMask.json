@@ -2,6 +2,17 @@
   "name": "UnsharpMask",
   "label": "Unsharp Mask",
   "description": "Sharpen the image with the unsharp mask technique. sharpened=original+[abs(original-blurred)-threshold]*amount",
+  "path": [
+    "Data Transforms",
+    "Filters & Smoothing"
+  ],
+  "tags": [
+    "unsharp",
+    "mask",
+    "sharpening",
+    "filter",
+    "edge enhancement"
+  ],
   "externalCompatible": false,
   "parameters": [
     {

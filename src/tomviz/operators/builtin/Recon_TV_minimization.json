@@ -2,6 +2,17 @@
   "name": "Recon_TV_minimization",
   "label": "Reconstruct (TV Minimization)",
   "description": "Reconstruct a tilt series using TV Minimization. The tilt series data should be aligned prior to reconstruction and the tilt axis must be parallel to the x-direction. The size of reconstruction will be (Nx,Ny,Ny). The number of iterations can be specified below. Reconstrucing a 256x256x256 tomogram typically takes more than 100 mins with 5 iterations.",
+  "path": [
+    "Tomography",
+    "Reconstruction"
+  ],
+  "tags": [
+    "reconstruction",
+    "TV minimization",
+    "total variation",
+    "compressed sensing",
+    "tomography"
+  ],
   "children": [
     {
       "name": "reconstruction",
@@ -9,7 +20,6 @@
       "type": "reconstruction"
     }
   ],
-
   "parameters": [
     {
       "name": "Niter",

@@ -2,6 +2,18 @@
   "name": "PyStackReg",
   "label": "Auto Tilt Image Align (PyStackReg)",
   "description": "Perform image alignment using PyStackReg.",
+  "path": [
+    "Tomography",
+    "Alignment"
+  ],
+  "tags": [
+    "alignment",
+    "tilt series",
+    "PyStackReg",
+    "automatic",
+    "registration",
+    "stack"
+  ],
   "parameters": [
     {
       "name": "transform_source",
@@ -9,7 +21,14 @@
       "description": "The source of the transformation matrices (i. e., generate them, load them from a file, etc.)",
       "type": "enumeration",
       "default": 0,
-      "options": [{ "Generate": "generate" }, { "Load From File": "from_file" }]
+      "options": [
+        {
+          "Generate": "generate"
+        },
+        {
+          "Load From File": "from_file"
+        }
+      ]
     },
     {
       "name": "transform_type",
@@ -18,11 +37,21 @@
       "type": "enumeration",
       "default": 0,
       "options": [
-        { "Translation": "translation" },
-        { "Rigid Body": "rigid body" },
-        { "Scaled Rotation": "scaled rotation" },
-        { "Affine": "affine" },
-        { "Bilinear": "bilinear" }
+        {
+          "Translation": "translation"
+        },
+        {
+          "Rigid Body": "rigid body"
+        },
+        {
+          "Scaled Rotation": "scaled rotation"
+        },
+        {
+          "Affine": "affine"
+        },
+        {
+          "Bilinear": "bilinear"
+        }
       ],
       "visible_if": "transform_source == 'generate'"
     },
@@ -51,10 +80,18 @@
       "type": "enumeration",
       "default": 3,
       "options": [
-        { "Previous": "previous" },
-        { "First": "first" },
-        { "Mean": "mean" },
-        { "SliceIndex": "slice_index" }
+        {
+          "Previous": "previous"
+        },
+        {
+          "First": "first"
+        },
+        {
+          "Mean": "mean"
+        },
+        {
+          "SliceIndex": "slice_index"
+        }
       ],
       "visible_if": "transform_source == 'generate'"
     },

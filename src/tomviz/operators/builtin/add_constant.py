@@ -4,8 +4,8 @@ JSON = {
     "name": "AddConstant",  # Act as id?
     "label": "Add Constant",
     "description": "Add a constant value to each voxel in the dataset.",
-    "tags": [],
-    "path": ["Test", "Constant", "Something"],
+    "tags": ["math", "arithmetic", "addition", "constant", "voxel"],
+    "path": ["Data Transforms", "Math Operations"],
     "parameters": [
         {
             "name": "constant",

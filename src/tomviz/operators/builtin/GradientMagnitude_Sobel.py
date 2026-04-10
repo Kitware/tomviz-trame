@@ -1,3 +1,13 @@
+JSON = {
+    "name": "GradientMagnitude_Sobel",
+    "label": "Gradient Magnitude",
+    "description": "Calculate 3D gradient magnitude using the Sobel operator.",
+    "tags": ["gradient", "magnitude", "sobel", "3D", "edge detection", "filter"],
+    "path": ["Data Transforms", "Filters & Smoothing"],
+    "parameters": [],
+}
+
+
 def transform(dataset):
     """Calculate 3D gradient magnitude using Sobel operator"""
 

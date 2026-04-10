@@ -2,6 +2,18 @@
   "name": "FXI TomoPy Reconstruction",
   "label": "FXI TomoPy Reconstruction",
   "description": "Run FXI TomoPy Reconstruction on a dataset",
+  "path": [
+    "Tomography",
+    "Reconstruction"
+  ],
+  "tags": [
+    "reconstruction",
+    "TomoPy",
+    "FXI",
+    "gridrec",
+    "tomography",
+    "full-field"
+  ],
   "widget": "FxiWorkflowWidget",
   "externalCompatible": false,
   "parameters": [

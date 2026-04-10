@@ -1,3 +1,22 @@
+JSON = {
+    "name": "RemoveBadPixelsTiltSeries",
+    "label": "Remove Bad Pixels",
+    "description": "Remove bad pixels in tilt series using median filter and standard deviation thresholding.",
+    "tags": ["bad pixels", "remove", "tilt series", "outlier", "median", "pre-processing"],
+    "path": ["Tomography", "Pre-processing"],
+    "parameters": [
+        {
+            "name": "threshold",
+            "label": "Threshold",
+            "description": "Standard deviation multiplier for identifying bad pixels.",
+            "type": "double",
+            "default": 5.0,
+            "minimum": 0.0,
+        },
+    ],
+}
+
+
 def transform(dataset, threshold=None):
     """Remove bad pixels in tilt series."""
 

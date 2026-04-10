@@ -2,6 +2,17 @@
   "name": "AutoTiltAxisShiftAlignment",
   "label": "Auto Tilt Axis Shift Align",
   "description": "Automatically center images along the tilt axis",
+  "path": [
+    "Tomography",
+    "Alignment"
+  ],
+  "tags": [
+    "alignment",
+    "tilt axis",
+    "shift",
+    "automatic",
+    "center of rotation"
+  ],
   "parameters": [
     {
       "name": "transform_source",
@@ -9,7 +20,14 @@
       "description": "The source of the shift transformation value (i. e., generate it, load it from a file, etc.)",
       "type": "enumeration",
       "default": 0,
-      "options": [{ "Generate": "generate" }, { "Load From File": "from_file" }]
+      "options": [
+        {
+          "Generate": "generate"
+        },
+        {
+          "Load From File": "from_file"
+        }
+      ]
     },
     {
       "name": "transform_file",

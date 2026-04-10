@@ -2,6 +2,17 @@
   "name": "SegmentParticles",
   "label": "Segment Particles",
   "description": "Segment spherical particles from a homogeneous, dark background. Even if the particles have pores, they are segmented as solid structures.",
+  "path": [
+    "Segmentation",
+    "Segmentation Workflows"
+  ],
+  "tags": [
+    "segmentation",
+    "particles",
+    "nanoparticles",
+    "detection",
+    "workflow"
+  ],
   "externalCompatible": false,
   "children": [
     {

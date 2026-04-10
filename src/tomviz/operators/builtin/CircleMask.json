@@ -2,6 +2,17 @@
   "name": "CircleMask",
   "label": "Circle Mask",
   "description": "Apply a circle mask to the data (requires tomopy)",
+  "path": [
+    "Data Transforms",
+    "Filters & Smoothing"
+  ],
+  "tags": [
+    "mask",
+    "circle",
+    "filter",
+    "crop",
+    "radial"
+  ],
   "parameters": [
     {
       "name": "axis",
@@ -9,7 +20,17 @@
       "description": "Axis along which mask will be performed",
       "type": "enumeration",
       "default": 0,
-      "options": [{ "X": 0 }, { "Y": 1 }, { "Z": 2 }]
+      "options": [
+        {
+          "X": 0
+        },
+        {
+          "Y": 1
+        },
+        {
+          "Z": 2
+        }
+      ]
     },
     {
       "name": "ratio",

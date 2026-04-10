@@ -2,6 +2,17 @@
   "name": "ClipEdges",
   "label": "Clip Edges",
   "description": "Sets the value of pixels near the edges of the volume to the minimum value leaving only a circular region with data to avoid artifacts near the edge of the reconstruction.",
+  "path": [
+    "Data Transforms",
+    "Math Operations"
+  ],
+  "tags": [
+    "clip",
+    "edges",
+    "crop",
+    "trim",
+    "boundary"
+  ],
   "parameters": [
     {
       "name": "clipNum",

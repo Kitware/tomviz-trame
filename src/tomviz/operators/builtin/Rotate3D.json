@@ -2,6 +2,17 @@
   "name": "Rotate",
   "label": "Rotate",
   "description": "Rotate dataset along a given axis.",
+  "path": [
+    "Data Transforms",
+    "Volume Manipulation"
+  ],
+  "tags": [
+    "rotate",
+    "rotation",
+    "transform",
+    "3D",
+    "volume"
+  ],
   "parameters": [
     {
       "name": "rotation_angle",
@@ -18,7 +29,17 @@
       "description": "Axis of rotation.",
       "type": "enumeration",
       "default": 0,
-      "options": [{ "X": 0 }, { "Y": 1 }, { "Z": 2 }]
+      "options": [
+        {
+          "X": 0
+        },
+        {
+          "Y": 1
+        },
+        {
+          "Z": 2
+        }
+      ]
     }
   ]
 }

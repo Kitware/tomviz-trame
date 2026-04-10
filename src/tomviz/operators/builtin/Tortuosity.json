@@ -2,6 +2,18 @@
   "name": "Tortuosity",
   "label": "Tortuosity",
   "description": "Tortuosity calculation",
+  "path": [
+    "Data Transforms",
+    "Material Analysis"
+  ],
+  "tags": [
+    "tortuosity",
+    "material",
+    "pore",
+    "transport",
+    "path length",
+    "analysis"
+  ],
   "parameters": [
     {
       "name": "phase",
@@ -15,7 +27,17 @@
       "label": "Distance Method",
       "type": "enumeration",
       "default": 0,
-      "options": [{ "Eucledian": 0 }, { "CityBlock": 1 }, { "ChessBoard": 2 }]
+      "options": [
+        {
+          "Eucledian": 0
+        },
+        {
+          "CityBlock": 1
+        },
+        {
+          "ChessBoard": 2
+        }
+      ]
     },
     {
       "name": "propagation_direction",
@@ -23,12 +45,24 @@
       "type": "enumeration",
       "default": 0,
       "options": [
-        { "X +": 0 },
-        { "X -": 1 },
-        { "Y +": 2 },
-        { "Y -": 3 },
-        { "Z +": 4 },
-        { "Z -": 5 }
+        {
+          "X +": 0
+        },
+        {
+          "X -": 1
+        },
+        {
+          "Y +": 2
+        },
+        {
+          "Y -": 3
+        },
+        {
+          "Z +": 4
+        },
+        {
+          "Z -": 5
+        }
       ]
     },
     {

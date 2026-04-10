@@ -1,3 +1,13 @@
+JSON = {
+    "name": "Subtract_TiltSer_Background",
+    "label": "Background Subtraction (Manual)",
+    "description": "Subtract background from tilt images using average pixel value of a selected region.",
+    "tags": ["background", "subtraction", "manual", "tilt series", "pre-processing"],
+    "path": ["Tomography", "Pre-processing"],
+    "parameters": [],
+}
+
+
 def transform(dataset, XRANGE=None, YRANGE=None, ZRANGE=None):
     """For each tilt image, the method uses average pixel value of selected
     region as the background level and subtracts it from the image."""

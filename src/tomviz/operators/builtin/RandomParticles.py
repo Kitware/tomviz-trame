@@ -1,3 +1,37 @@
+JSON = {
+    "name": "RandomParticles",
+    "label": "Random Particles",
+    "description": "Generate a synthetic dataset with random particles.",
+    "tags": ["random", "particles", "synthetic", "generate", "simulation"],
+    "path": ["Tomography", "Simulation & Demonstrations"],
+    "parameters": [
+        {
+            "name": "p_in",
+            "label": "Inner Structure Parameter",
+            "description": "Controls the inner structure of the particles.",
+            "type": "double",
+            "default": 30.0,
+        },
+        {
+            "name": "p_s",
+            "label": "Shape Parameter",
+            "description": "Controls the shape of the particles.",
+            "type": "double",
+            "default": 60.0,
+        },
+        {
+            "name": "sparsity",
+            "label": "Sparsity",
+            "description": "Fraction of non-zero voxels.",
+            "type": "double",
+            "default": 0.2,
+            "minimum": 0.0,
+            "maximum": 1.0,
+        },
+    ],
+}
+
+
 def generate_dataset(array, p_in=30.0, p_s=60.0, sparsity=0.20):
     import numpy as np
 

@@ -2,13 +2,35 @@
   "name": "BinaryDilate",
   "label": "Binary Dilate",
   "description": "Dilate segmented objects with a given label by a spherically symmetric structuring element of a given radius.",
+  "path": [
+    "Segmentation",
+    "Morphology"
+  ],
+  "tags": [
+    "morphology",
+    "binary",
+    "dilate",
+    "expand",
+    "segmentation",
+    "ITK"
+  ],
   "parameters": [
     {
       "name": "structuring_element_id",
       "label": "Structuring Element",
       "type": "enumeration",
       "default": 0,
-      "options": [{ "Box": 0 }, { "Ball": 1 }, { "Cross": 2 }]
+      "options": [
+        {
+          "Box": 0
+        },
+        {
+          "Ball": 1
+        },
+        {
+          "Cross": 2
+        }
+      ]
     },
     {
       "name": "radius",

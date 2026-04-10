@@ -1,5 +1,14 @@
 import tomviz.operators
 
+JSON = {
+    "name": "DefaultITKTransform",
+    "label": "Default ITK Transform",
+    "description": "Example ITK filter that adds 10 to each voxel value.",
+    "tags": ["ITK", "example", "default", "transform"],
+    "path": ["Data Transforms", "Data Management"],
+    "parameters": [],
+}
+
 
 class DefaultITKTransform(tomviz.operators.CancelableOperator):
     def transform(self, dataset):

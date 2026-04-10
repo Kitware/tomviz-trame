@@ -2,6 +2,19 @@
   "name": "Artifact Removal with Total Variation",
   "label": "TV_Filter",
   "description": "Apply a Total-Variation Minizimation-based Filter on tiff stacks, to remove structured artifacts (i.e. scratches, curtaining, or stripes) that span an angular range in Fourier Space.\nThe range of intensities will be removed with a 'Missing Wedge' in Fourier Space and the lost information will be recovered with TV-Min",
+  "path": [
+    "Data Transforms",
+    "Filters & Smoothing"
+  ],
+  "tags": [
+    "total variation",
+    "artifact removal",
+    "stripes",
+    "curtaining",
+    "scratches",
+    "denoise",
+    "TV filter"
+  ],
   "parameters": [
     {
       "name": "wedgeSize",

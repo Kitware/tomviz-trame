@@ -2,6 +2,17 @@
   "name": "RotationAlign",
   "label": "Rotation Alignment",
   "description": "Align the rotation axis of a tilt series to the x-axis.",
+  "path": [
+    "Tomography",
+    "Alignment"
+  ],
+  "tags": [
+    "alignment",
+    "rotation",
+    "tilt axis",
+    "manual",
+    "interactive"
+  ],
   "widget": "RotationAlignWidget",
   "parameters": [
     {
@@ -9,7 +20,11 @@
       "label": "Shift",
       "description": "Amount to shift by.",
       "type": "double",
-      "default": [0.0, 0.0, 0.0]
+      "default": [
+        0.0,
+        0.0,
+        0.0
+      ]
     },
     {
       "name": "rotation_angle",

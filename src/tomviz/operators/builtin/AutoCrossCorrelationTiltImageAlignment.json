@@ -2,6 +2,18 @@
   "name": "AutoCrossCorrelationTiltImageAlignment",
   "label": "Auto Tilt Image Align (XCORR)",
   "description": "Automatically align tilt images by cross-correlation",
+  "path": [
+    "Tomography",
+    "Alignment"
+  ],
+  "tags": [
+    "alignment",
+    "tilt series",
+    "cross correlation",
+    "automatic",
+    "registration",
+    "XCORR"
+  ],
   "parameters": [
     {
       "name": "transform_source",
@@ -9,7 +21,14 @@
       "description": "The source of the transformation shifts (i. e., generate them, load them from a file, etc.)",
       "type": "enumeration",
       "default": 0,
-      "options": [{ "Generate": "generate" }, { "Load From File": "from_file" }]
+      "options": [
+        {
+          "Generate": "generate"
+        },
+        {
+          "Load From File": "from_file"
+        }
+      ]
     },
     {
       "name": "transform_file",

@@ -1,5 +1,14 @@
 from tomviz import utils
 
+JSON = {
+    "name": "BinTiltSeriesByTwo",
+    "label": "Bin Tilt Images x2",
+    "description": "Downsample tilt images by a factor of 2.",
+    "tags": ["bin", "downsample", "tilt series", "pre-processing", "2x"],
+    "path": ["Tomography", "Pre-processing"],
+    "parameters": [],
+}
+
 
 @utils.apply_to_each_array
 def transform(dataset):

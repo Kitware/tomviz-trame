@@ -1,3 +1,13 @@
+JSON = {
+    "name": "LaplaceFilter",
+    "label": "Laplace Sharpen",
+    "description": "Apply a Laplace filter to the dataset.",
+    "tags": ["laplace", "laplacian", "sharpen", "filter", "edge detection"],
+    "path": ["Data Transforms", "Filters & Smoothing"],
+    "parameters": [],
+}
+
+
 def transform(dataset):
     """Apply a Laplace filter to dataset."""
 

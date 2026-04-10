@@ -2,6 +2,15 @@ import tomviz.operators
 
 NUMBER_OF_CHUNKS = 10
 
+JSON = {
+    "name": "Square_Root_Data",
+    "label": "Square Root Data",
+    "description": "Compute the square root of each voxel in the dataset.",
+    "tags": ["square root", "math", "transform", "power"],
+    "path": ["Data Transforms", "Math Operations"],
+    "parameters": [],
+}
+
 
 class SquareRootOperator(tomviz.operators.CancelableOperator):
     def transform(self, dataset):

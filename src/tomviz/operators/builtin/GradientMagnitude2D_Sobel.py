@@ -1,3 +1,13 @@
+JSON = {
+    "name": "GradientMagnitude2D_Sobel",
+    "label": "2D Gradient Magnitude",
+    "description": "Calculate gradient magnitude of each tilt image using the Sobel operator.",
+    "tags": ["gradient", "magnitude", "sobel", "2D", "tilt series", "edge detection"],
+    "path": ["Tomography", "Pre-processing"],
+    "parameters": [],
+}
+
+
 def transform(dataset):
     """Calculate gradient magnitude of each tilt image using Sobel operator"""
 

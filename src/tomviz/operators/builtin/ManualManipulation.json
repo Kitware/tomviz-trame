@@ -2,6 +2,17 @@
   "name": "manual_manipulation",
   "label": "Manual Manipulation",
   "description": "Manually manipulate a dataset with scaling, translations, and rotations",
+  "path": [
+    "Data Transforms",
+    "Volume Manipulation"
+  ],
+  "tags": [
+    "manual",
+    "manipulation",
+    "interactive",
+    "volume",
+    "transform"
+  ],
   "widget": "ManualManipulationWidget",
   "externalCompatible": false,
   "parameters": [
@@ -13,7 +24,11 @@
       "label": "Scaling",
       "description": "The scaling to apply",
       "type": "double",
-      "default": [0.0, 0.0, 0.0],
+      "default": [
+        0.0,
+        0.0,
+        0.0
+      ],
       "minimum": "negative_size",
       "maximum": "size"
     },
@@ -22,7 +37,11 @@
       "label": "Rotation",
       "description": "The rotation to apply",
       "type": "double",
-      "default": [0.0, 0.0, 0.0],
+      "default": [
+        0.0,
+        0.0,
+        0.0
+      ],
       "minimum": "negative_size",
       "maximum": "size"
     },
@@ -31,7 +50,11 @@
       "label": "Shift",
       "description": "The shift to apply",
       "type": "int",
-      "default": [0, 0, 0],
+      "default": [
+        0,
+        0,
+        0
+      ],
       "minimum": "negative_size",
       "maximum": "size"
     },
@@ -47,7 +70,11 @@
       "label": "Reference Spacing",
       "description": "The reference spacing",
       "type": "double",
-      "default": [0.0, 0.0, 0.0],
+      "default": [
+        0.0,
+        0.0,
+        0.0
+      ],
       "minimum": "negative_size",
       "maximum": "size"
     },
@@ -56,7 +83,11 @@
       "label": "Reference Shape",
       "description": "The reference shape",
       "type": "int",
-      "default": [0, 0, 0],
+      "default": [
+        0,
+        0,
+        0
+      ],
       "minimum": "negative_size",
       "maximum": "size"
     }

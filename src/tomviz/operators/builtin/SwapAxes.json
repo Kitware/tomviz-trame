@@ -2,6 +2,17 @@
   "name": "Swap Axes",
   "label": "Swap Axes",
   "description": "Swap two axes in the dataset.",
+  "path": [
+    "Data Transforms",
+    "Volume Manipulation"
+  ],
+  "tags": [
+    "swap",
+    "axes",
+    "transpose",
+    "reorder",
+    "permute"
+  ],
   "parameters": [
     {
       "name": "axis1",
@@ -9,7 +20,17 @@
       "description": "First axis",
       "type": "enumeration",
       "default": 0,
-      "options": [{ "X": 0 }, { "Y": 1 }, { "Z": 2 }]
+      "options": [
+        {
+          "X": 0
+        },
+        {
+          "Y": 1
+        },
+        {
+          "Z": 2
+        }
+      ]
     },
     {
       "name": "axis2",
@@ -17,7 +38,17 @@
       "description": "Second axis",
       "type": "enumeration",
       "default": 2,
-      "options": [{ "X": 0 }, { "Y": 1 }, { "Z": 2 }]
+      "options": [
+        {
+          "X": 0
+        },
+        {
+          "Y": 1
+        },
+        {
+          "Z": 2
+        }
+      ]
     }
   ]
 }

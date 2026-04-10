@@ -1,5 +1,14 @@
 from tomviz.utils import apply_to_each_array
 
+JSON = {
+    "name": "BinVolumeByTwo",
+    "label": "Bin Volume x2",
+    "description": "Downsample volume by a factor of 2.",
+    "tags": ["bin", "downsample", "volume", "2x", "resize"],
+    "path": ["Data Transforms", "Volume Manipulation"],
+    "parameters": [],
+}
+
 
 @apply_to_each_array
 def transform(dataset):

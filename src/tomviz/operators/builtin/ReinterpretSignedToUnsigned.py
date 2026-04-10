@@ -1,3 +1,13 @@
+JSON = {
+    "name": "ReinterpretSignedToUnsigned",
+    "label": "Reinterpret Signed to Unsigned",
+    "description": "Reinterpret a signed integral array type as its unsigned counterpart.",
+    "tags": ["reinterpret", "signed", "unsigned", "data type", "conversion"],
+    "path": ["Data Transforms", "Data Management"],
+    "parameters": [],
+}
+
+
 def transform(dataset):
     """Reinterpret a signed integral array type as its unsigned counterpart.
     This can be used when the bytes of a data array have been interpreted as a

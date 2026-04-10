@@ -1,3 +1,13 @@
+JSON = {
+    "name": "NormalizeTiltSeries",
+    "label": "Normalize Average Image Intensity",
+    "description": "Normalize tilt series so that each tilt image has the same total intensity.",
+    "tags": ["normalize", "intensity", "tilt series", "average", "pre-processing"],
+    "path": ["Tomography", "Pre-processing"],
+    "parameters": [],
+}
+
+
 def transform(dataset):
     """
     Normalize tilt series so that each tilt image has the same total intensity.
