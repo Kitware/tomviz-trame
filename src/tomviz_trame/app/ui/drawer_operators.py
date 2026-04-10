@@ -74,14 +74,18 @@ class OperatorSelection(html.Div):
                         classes="overflow-scroll mt-2",
                     ),
                     v3.VTreeview(
+                        v_model_opened=("operator_opened", []),
                         v_model_activated=("operator_activated", []),
                         items=("operator_root_node.children",),
                         density="compact",
-                        item_value="title",
+                        item_value="_id",
                         activatable=True,
                         open_on_click=True,
                         indent=20,
                         hide_actions=True,
+                        open_all=(
+                            "operator_favorites || (operator_filter|| '').length",
+                        ),
                         search=(
                             "operator_favorites ? `${operator_filter} ::fav::` : operator_filter",
                         ),
