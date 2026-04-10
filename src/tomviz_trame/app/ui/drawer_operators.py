@@ -1,6 +1,8 @@
 from trame.widgets import dataclass, html
 from trame.widgets import vuetify3 as v3
 
+from tomviz_trame.app import data_model
+
 
 class OperatorSelection(html.Div):
     def __init__(self):
@@ -47,6 +49,10 @@ class OperatorSelection(html.Div):
                         color="primary",
                         density="comfortable",
                         flat=True,
+                        click=(
+                            self.create_operator,
+                            "[active_input._id, operator_activated[0]]",
+                        ),
                     )
                 with html.Div(
                     classes="d-flex mx-2 pa-1 ga-2 align-center justify-space-around bg-surface-light rounded",
@@ -110,3 +116,11 @@ class OperatorSelection(html.Div):
                             v_if="!item.children",
                             v_on_click_prevent="item.favorite = !item.favorite",
                         )
+
+    def create_operator(self, input_id, operator_id):
+        operator_node = data_model.get_instance(operator_id)
+        self.ctx.pipeline.add_operator(
+            input_id,
+            operator_node.name,
+            icon=operator_node.icon,
+        )
