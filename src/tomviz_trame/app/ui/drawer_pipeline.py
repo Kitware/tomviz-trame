@@ -17,7 +17,8 @@ class PipelineSection(html.Div):
             ):
                 with v3.Template(v_slot_append=True):
                     with dataclass.Provider(
-                        "active_view", instance=("active_view_id",)
+                        name="active_view",
+                        instance=("active_view_id",),
                     ):
                         v3.VIcon("mdi-stop", color=("active_view.color",))
             with v3.VExpandTransition():

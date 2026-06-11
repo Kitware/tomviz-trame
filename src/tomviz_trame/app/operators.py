@@ -8,6 +8,13 @@ from trame.app import TrameComponent
 from trame.decorators import controller
 
 from tomviz_trame.app import data_model
+from tomviz_trame.app.operator_gui import to_operator_data
+
+__all__ = [
+    "OperatorEntry",
+    "Operators",
+    "to_operator_data",
+]
 
 DEFAULT_CONFIG = Path.home() / ".tomviz" / "operators.json"
 
@@ -70,6 +77,7 @@ class OperatorEntry:
             tags=self.tags,
             icon=self.icon,
             favorite=self.name in favs,
+            meta=self.json,
         )
 
 

@@ -9,7 +9,7 @@ dependencies = [
     "trame>=3.12",
     "trame-vuetify",
     "trame-vtk",
-    "trame-dataclass>=2.0.5",
+    "trame-dataclass>=2.1",
     "trame-dockview",
     "trame-color-opacity-editor",
     "loguru",

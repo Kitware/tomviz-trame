@@ -28,6 +28,7 @@ class OperatorNode(StateDataModel):
     tags = Sync(list[str], list)
     favorite = Sync(bool, False)
     icon = Sync(str)
+    meta = Sync(dict)
 
     def update_count(self):
         return 1
@@ -51,6 +52,9 @@ class Operator(StateDataModel):
     icon = Sync(str, "mdi-plus")
     input = Sync(Self | SourceProxy, has_dataclass=True)
     config = Sync(dict, dict, client_deep_reactive=True)
+
+    # Operator data
+    data = Sync(StateDataModel, has_dataclass=True)
 
     # UI state
     expand_pipeline = Sync(bool, True)

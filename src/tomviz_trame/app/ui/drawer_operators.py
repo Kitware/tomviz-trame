@@ -123,4 +123,5 @@ class OperatorSelection(html.Div):
             input_id,
             operator_node.name,
             icon=operator_node.icon,
+            meta=operator_node.meta,
         )

@@ -9,7 +9,7 @@ from paraview import servermanager, simple
 from trame.app import TrameComponent
 from trame.decorators import trigger
 
-from tomviz_trame.app import data_model, module, ui
+from tomviz_trame.app import data_model, module, operators, ui
 from tomviz_trame.app.ui.dynamic import DYNAMIC_TEMPLATES
 from tomviz_trame.paraview import load_plugins
 
@@ -214,7 +214,14 @@ class PipelineManager(TrameComponent):
 
         return None
 
-    def add_operator(self, data_id: str, operator_name: str, icon: str):
+    def add_operator(
+        self,
+        data_id: str,
+        operator_name: str,
+        icon: str,
+        meta: dict,
+        **_,
+    ):
         input = data_model.get_instance(data_id)
         operator_proxy = simple.TomvizVolumeTransform(Input=input.proxy)
         operator_filter = data_model.Operator(
@@ -223,6 +230,7 @@ class PipelineManager(TrameComponent):
             proxy=operator_proxy,
             color_opacity=data_model.create_default_color_opacity(input),
             icon=icon,
+            data=operators.to_operator_data(self.server, meta),
         )
 
         input.pipelines = [*input.pipelines, operator_filter]
@@ -234,7 +242,12 @@ class PipelineManager(TrameComponent):
                 obj = data_model.get_instance(active_node[0])
                 color_opacity = getattr(obj, "color_opacity", None)
                 s.active_color_opacity_id = color_opacity._id if color_opacity else ""
-                if isinstance(obj, data_model.SourceProxy | data_model.Operator):
+                if isinstance(obj, data_model.Operator):
+                    rep_tpl = DYNAMIC_TEMPLATES.get("operator")
+                    s.active_data_id = active_node[0]
+                    s.active_representation_id = None
+                    s.property_templates = [rep_tpl] if rep_tpl else []
+                elif isinstance(obj, data_model.SourceProxy):
                     s.active_data_id = active_node[0]
                     s.active_representation_id = None
                     s.property_templates = []
