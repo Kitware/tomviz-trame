@@ -117,6 +117,8 @@ isort.required-imports = []
 "tests/**" = ["T20"]
 "noxfile.py" = ["T20"]
 "src/**" = ["SIM117"]
+"src/tomviz_trame/app/ui/drawer_operators.py" = ["T20"]
+
 [tool.semantic_release]
 version_toml = [
     "pyproject.toml:project.version",

@@ -1,3 +1,6 @@
+import json
+
+from trame.decorators import change
 from trame.widgets import dataclass, html
 from trame.widgets import vuetify3 as v3
 
@@ -125,3 +128,10 @@ class OperatorSelection(html.Div):
             icon=operator_node.icon,
             meta=operator_node.meta,
         )
+
+    @change("operator_activated")
+    def _on_active(self, operator_activated, **_):
+        if operator_activated:
+            operator_node = data_model.get_instance(operator_activated[0])
+            if isinstance(operator_node, data_model.OperatorNode):
+                print(json.dumps(operator_node.meta, indent=2))
