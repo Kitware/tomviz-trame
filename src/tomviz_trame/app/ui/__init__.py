@@ -4,6 +4,7 @@ from . import (
     color_opacity,
     drawer_color_opacity,
     drawer_info,
+    drawer_operators,
     drawer_pipeline,
     drawer_properties,
     open_data,
@@ -15,6 +16,7 @@ from . import (
 from .color_opacity import ColorOpacityEditor
 from .drawer_color_opacity import ColorOpacitySection
 from .drawer_info import DataInformationSection
+from .drawer_operators import OperatorSelection
 from .drawer_pipeline import PipelineSection
 from .drawer_properties import PropertiesSections
 from .dynamic import initialize_dynamic_ui
@@ -31,6 +33,7 @@ def reload(m=None):
         color_opacity,
         drawer_color_opacity,
         drawer_info,
+        drawer_operators,
         drawer_pipeline,
         drawer_properties,
         open_data,
@@ -49,6 +52,7 @@ __all__ = [
     "ColorOpacitySection",
     "DataInformationSection",
     "FileLoader",
+    "OperatorSelection",
     "PipelineSection",
     "PropertiesSections",
     "RenderWindow",

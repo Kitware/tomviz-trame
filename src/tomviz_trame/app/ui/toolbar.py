@@ -49,12 +49,12 @@ class Toolbar(v3.VAppBar):
                 click="tomviz_file_loader = true",
             )
 
-            # Data operators
-            ui.toolbar_btn(
-                f"{module.BASENAME}/assets/data/operator.svg",
-                v_tooltip_bottom="'Select operator'",
-                click=self.fake_busy,
-            )
+            # # Data operators
+            # ui.toolbar_btn(
+            #     f"{module.BASENAME}/assets/data/operator.svg",
+            #     v_tooltip_bottom="'Select operator'",
+            #     click=self.fake_busy,
+            # )
 
             v3.VDivider(vertical=True, classes="mr-2")
 

@@ -31,7 +31,29 @@ function enableSolidColor(array_names) {
   ];
 }
 
+function treeFilter(value, search, item) {
+  const node = item.raw;
+  if (search.length == 0) {
+    return true;
+  }
+  const favOnly = search.indexOf("::fav::") > -1;
+  if (favOnly && !node.favorite) {
+    return false;
+  }
+  const tokens = search
+    .split(" ")
+    .map((v) => v.trim().toLowerCase())
+    .filter((v) => v.length && v !== "::fav::");
+  if (tokens.length == 0) {
+    return true;
+  }
+  const tags = (node.tags || []).map((v) => v.toLowerCase());
+  const item_query = [node.title.toLowerCase(), ...tags].join("  ");
+  return tokens.every((v) => item_query.indexOf(v) > -1);
+}
+
 window.trame.utils.tomviz = {
   capitalize,
   enableSolidColor,
+  treeFilter,
 };

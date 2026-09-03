@@ -1,0 +1,20 @@
+{
+  "path": [
+    "Data Transforms",
+    "Material Analysis"
+  ],
+  "tags": [
+    "molecule",
+    "atomic",
+    "structure",
+    "visualization"
+  ],
+  "externalCompatible": false,
+  "results": [
+    {
+      "name": "molecule",
+      "label": "Reconstructed atomic positions",
+      "type": "molecule"
+    }
+  ]
+}

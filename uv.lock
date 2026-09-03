@@ -1345,7 +1345,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "trame", specifier = ">=3.12" },
     { name = "trame-color-opacity-editor" },
-    { name = "trame-dataclass" },
+    { name = "trame-dataclass", specifier = ">=2.1" },
     { name = "trame-dockview" },
     { name = "trame-vtk" },
     { name = "trame-vuetify" },
@@ -1403,16 +1403,16 @@ wheels = [
 
 [[package]]
 name = "trame-dataclass"
-version = "2.0.3"
+version = "2.1.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "loguru" },
     { name = "trame-client" },
     { name = "typing-extensions", marker = "python_full_version == '3.13.*'" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/c9/59/07bdc639c7e1f41fa207b4ec0141f763e787560e83412ec7dce07068f99c/trame_dataclass-2.0.3.tar.gz", hash = "sha256:831c5f0d448ac259e4c1cd09eb00ec2e01dce3f48bda97ba9dca41c15e0235f4", size = 15175, upload-time = "2026-03-26T02:44:01.329Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/07/f2/0472c9f6951ad6140039ea2f5c094ea02d5cde6e0e940ae447dd7de28d12/trame_dataclass-2.1.0.tar.gz", hash = "sha256:774554ad955998d3ad7a887e2851d433a054171294953a23a166eb083fe768d3", size = 15862, upload-time = "2026-06-10T21:13:35.348Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/9e/cf/b03934b46a1a388b136dfc412a6bc01108c0d1a47a07067ce8003c92a8ee/trame_dataclass-2.0.3-py3-none-any.whl", hash = "sha256:953e06e0b180e1be547fb822cdc5de3bb985a43e768ade8e5d752c3c64893029", size = 21420, upload-time = "2026-03-26T02:43:59.896Z" },
+    { url = "https://files.pythonhosted.org/packages/87/e1/6c85dabd0189bf37e23e8e0dd71e7d9b346c9222b1a44b2c08f9d30d6f78/trame_dataclass-2.1.0-py3-none-any.whl", hash = "sha256:e56e0dff0c90dccdf8d98ac1182a1b535d98e14505e0fb31fe2277c88a585ab8", size = 22147, upload-time = "2026-06-10T21:13:34.188Z" },
 ]
 
 [[package]]
