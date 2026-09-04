@@ -3,7 +3,6 @@ from __future__ import annotations
 from collections.abc import Callable
 
 from loguru import logger
-from paraview import servermanager
 from trame.app.dataclass import (
     ServerOnly,
     StateDataModel,
@@ -13,6 +12,7 @@ from trame.app.dataclass import (
 )
 
 from tomviz_trame.app.data_model.pipeline import SourceProxy
+from tomviz_trame.app.pipelines.representations import outline, slice, volume
 
 from .pipeline import ColorOpacity, create_default_color_opacity
 from .view import WindowInternalState
@@ -22,10 +22,10 @@ from .view import WindowInternalState
 class ViewMixin:
     @watch("Visibility")
     def _on_visibility_change(self, visibility):
-        if self.proxy is None:
+        if self.representation is None:
             return
 
-        self.proxy.Visibility = int(visibility)
+        self.representation.actor.visibility = bool(visibility)
         self.render()
 
     def render(self, *_):
@@ -96,15 +96,14 @@ class ColorOpacityMixin:
 
         self.on_color_opacity_active_array_change(active.active_data_array)
 
-        if self.proxy is None:
+        if self.representation is None:
             return
 
         # Apply colors
-        self.proxy.LookupTable = active.lut
+        self.representation.use_lut(active.lut)
 
         # Apply opacity (if available)
-        if hasattr(self.proxy, "ScalarOpacityFunction"):
-            self.proxy.ScalarOpacityFunction = active.pwf
+        self.representation.use_pwf(active.pwf)
 
         self.render()
 
@@ -112,16 +111,16 @@ class ColorOpacityMixin:
         if not active_data_array:
             return
 
-        if self.proxy is None:
+        if self.representation is None:
             return
 
-        self.proxy.ColorArrayName = ("POINTS", active_data_array)
+        self.representation.ColorArrayName = ("POINTS", active_data_array)
 
 
 # -----------------------------------------------------------------------------
 class OutlineProperties(ViewMixin, StateDataModel):
     # Core representation properties
-    proxy = ServerOnly(servermanager.Proxy | None)
+    representation = ServerOnly(outline.OutlineRepresentation | None)
     input = Sync(SourceProxy, has_dataclass=True)
     view = Sync(WindowInternalState, has_dataclass=True)
     label = Sync(str)
@@ -137,16 +136,16 @@ class OutlineProperties(ViewMixin, StateDataModel):
         self.reset_camera()
 
     def pull(self):
-        if self.proxy is None:
+        if self.representation is None:
             return
 
-        self.Visibility = bool(self.proxy.Visibility)
+        self.Visibility = bool(self.representation.actor.visibility)
 
 
 # -----------------------------------------------------------------------------
 class VolumeProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
     # Core representation properties
-    proxy = ServerOnly(servermanager.Proxy | None)
+    representation = ServerOnly(volume.VolumeRepresentation | None)
     input = Sync(SourceProxy, has_dataclass=True)
     view = Sync(WindowInternalState, has_dataclass=True)
     label = Sync(str)
@@ -173,28 +172,32 @@ class VolumeProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
         self.reset_camera()
 
     def pull(self):
-        if self.proxy is None:
+        if self.representation is None:
             return
 
         # Update representation info
-        self.Visibility = bool(self.proxy.Visibility)
-        self.InterpolationType = str(self.proxy.InterpolationType)[1:-1]
-        self.Shade = bool(self.proxy.Shade)
-        self.GlobalIlluminationReach = float(self.proxy.GlobalIlluminationReach)
-        self.VolumetricScatteringBlending = float(
-            self.proxy.VolumetricScatteringBlending
+        self.Visibility = bool(self.representation.Visibility)
+        self.InterpolationType = str(self.representation.InterpolationType)
+        self.Shade = bool(self.representation.Shade)
+        self.GlobalIlluminationReach = float(
+            self.representation.GlobalIlluminationReach
         )
-        self.VolumeAnisotropy = float(self.proxy.VolumeAnisotropy)
+        self.VolumetricScatteringBlending = float(
+            self.representation.VolumetricScatteringBlending
+        )
+        self.VolumeAnisotropy = float(self.representation.VolumeAnisotropy)
 
     def push(self):
-        if self.proxy is None:
+        if self.representation is None:
             return
 
-        self.proxy.InterpolationType = self.InterpolationType
-        self.proxy.Shade = int(self.Shade)
-        self.proxy.GlobalIlluminationReach = self.GlobalIlluminationReach
-        self.proxy.VolumetricScatteringBlending = self.VolumetricScatteringBlending
-        self.proxy.VolumeAnisotropy = self.VolumeAnisotropy
+        self.representation.InterpolationType = self.InterpolationType
+        self.representation.Shade = int(self.Shade)
+        self.representation.GlobalIlluminationReach = self.GlobalIlluminationReach
+        self.representation.VolumetricScatteringBlending = (
+            self.VolumetricScatteringBlending
+        )
+        self.representation.VolumeAnisotropy = self.VolumeAnisotropy
 
     @watch(
         "InterpolationType",
@@ -213,7 +216,7 @@ class SliceProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
     # Core representation properties
     input = Sync(SourceProxy, has_dataclass=True)
     view = Sync(WindowInternalState, has_dataclass=True)
-    proxy = ServerOnly(servermanager.Proxy | None)
+    representation = ServerOnly(slice.SliceRepresentation | None)
     label = Sync(str)
     name = Sync(str)
     icon = Sync(str)
@@ -238,10 +241,11 @@ class SliceProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
         self.reset_camera()
 
     def pull(self):
-        if self.proxy is None:
+        if self.representation is None:
             return
 
-        extent = self.proxy.Input.GetDataInformation().DataInformation.GetExtent()
+        extent = self.representation.input_extent
+
         self.Dimensions = (
             extent[1] - extent[0],
             extent[3] - extent[2],
@@ -251,19 +255,19 @@ class SliceProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
         logger.debug("Dimensions {}", self.Dimensions)
 
         # Update representation info
-        self.Visibility = bool(self.proxy.Visibility)
-        self.Slice = self.proxy.Slice
-        self.SliceDirection = self.proxy.SliceDirection
+        self.Visibility = bool(self.representation.actor.visibility)
+        self.Slice = self.representation.Slice
+        self.SliceDirection = self.representation.SliceDirection
 
         # Update max slice
         self._on_direction_change(self.SliceDirection)
 
     def push(self):
-        if self.proxy is None:
+        if self.representation is None:
             return
 
-        self.proxy.SliceDirection = self.SliceDirection
-        self.proxy.Slice = self.Slice
+        self.representation.SliceDirection = self.SliceDirection
+        self.representation.Slice = self.Slice
 
     @watch("SliceDirection")
     def _on_direction_change(self, direction):

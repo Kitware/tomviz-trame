@@ -5,13 +5,12 @@ from enum import Enum
 from pathlib import Path
 
 from loguru import logger
-from paraview import servermanager, simple
 from trame.app import TrameComponent
 from trame.decorators import trigger
 
-from tomviz_trame.app import data_model, module, operators, ui
+from tomviz_trame.app import data_model, module, ui
+from tomviz_trame.app.pipelines.vtk import io
 from tomviz_trame.app.ui.dynamic import DYNAMIC_TEMPLATES
-from tomviz_trame.paraview import load_plugins
 
 
 class RepresentationType(Enum):
@@ -66,7 +65,6 @@ class PipelineManager(TrameComponent):
         self.representations = {}  # { view_id: [rep, ...] }
         self.views = {}
         self.pending_tasks = set()
-        self.pxm = servermanager.ProxyManager()
         self.tree = data_model.Pipeline(self.server)
         self.state.property_templates = []
         self.state.active_view_id = None
@@ -79,8 +77,6 @@ class PipelineManager(TrameComponent):
         if self.server.hot_reload:
             self.server.controller.on_server_reload.add(self.refresh_views_later)
 
-        load_plugins(ns=globals())
-
     def __del__(self):
         self.tree.clear_watchers()
 
@@ -91,12 +87,9 @@ class PipelineManager(TrameComponent):
             return None
 
         # Create reader and track it
-        reader = servermanager._getPyProxy(
-            simple.TIFFSeriesReader(FileNames=[str(file_path)])
-        )
-        reader.UpdatePipeline()
+        reader = io.Reader(file_path)
         dataset = data_model.SourceProxy(self.server, name=file_path.stem)
-        dataset.proxy = reader
+        dataset.algo = reader
         dataset.update_info()
 
         self.add_default_color_opacity(dataset._id)
@@ -114,9 +107,10 @@ class PipelineManager(TrameComponent):
 
     def add_view(self) -> str:
         view = ui.RenderWindow(self.server)
+        logger.debug("Add view {} vs {}", view.local_state._id, view.vtk_id)
         self.views[view.local_state._id] = view
         self.ctx.dock_view.add_panel(
-            view.pv_id,
+            view.vtk_id,
             "3D View",
             view.tpl_name,
             tabComponent="tomviz-dockview-tab",
@@ -135,14 +129,17 @@ class PipelineManager(TrameComponent):
         # - remove view in self.views
         view = self.views.get(view_id)
         if view:
-            self.ctx.dock_view.remove_panel(view.pv_id)
+            view.vtk_view.clear()
+            self.ctx.dock_view.remove_panel(view.vtk_id)
             self.state.active_view_id = None
+            del self.representations[view_id]
+            del self.views[view.local_state._id]
 
     def activate_panel(self, panel_id):
         logger.debug("activate_panel {}", panel_id)
         found = False
         for view_id, view in self.views.items():
-            if view.pv_id == panel_id:
+            if view.vtk_id == panel_id:
                 self.state.active_view_id = view_id
                 found = True
 
@@ -162,7 +159,7 @@ class PipelineManager(TrameComponent):
         """Register all views into dockview"""
         for view in self.views.values():
             self.ctx.dock_view.add_panel(
-                view.pv_id,
+                view.vtk_id,
                 "3D View",
                 view.tpl_name,
                 tabComponent="tomviz-dockview-tab",
@@ -222,18 +219,21 @@ class PipelineManager(TrameComponent):
         meta: dict,
         **_,
     ):
-        input = data_model.get_instance(data_id)
-        operator_proxy = simple.TomvizVolumeTransform(Input=input.proxy)
-        operator_filter = data_model.Operator(
-            self.server,
-            name=operator_name,
-            proxy=operator_proxy,
-            color_opacity=data_model.create_default_color_opacity(input),
-            icon=icon,
-            data=operators.to_operator_data(self.server, meta),
+        logger.critical(
+            "Add Operator: {}, {}, {}, {}", data_id, operator_name, icon, meta
         )
+        # input = data_model.get_instance(data_id)
+        # operator_proxy = simple.TomvizVolumeTransform(Input=input.proxy)
+        # operator_filter = data_model.Operator(
+        #     self.server,
+        #     name=operator_name,
+        #     proxy=operator_proxy,
+        #     color_opacity=data_model.create_default_color_opacity(input),
+        #     icon=icon,
+        #     data=operators.to_operator_data(self.server, meta),
+        # )
 
-        input.pipelines = [*input.pipelines, operator_filter]
+        # input.pipelines = [*input.pipelines, operator_filter]
 
     def _on_active_change(self, active_node: list[str]):
         logger.debug("active_node: {}", active_node)

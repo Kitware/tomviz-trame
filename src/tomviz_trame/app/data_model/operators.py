@@ -1,10 +1,6 @@
 from typing import Self
 
-from paraview import servermanager
 from trame.app.dataclass import StateDataModel, Sync, TypeValidation, watch
-from trame_dataclass.v2 import ServerOnly
-
-from tomviz_trame.app.utils import data
 
 from .pipeline import SourceProxy
 
@@ -78,19 +74,19 @@ class Operator(StateDataModel):
     pipelines = Sync(list, list, has_dataclass=True)  # ["SourceProxy" | "Operator"]
 
     # Server only fields
-    proxy = ServerOnly(servermanager.Proxy | None)
+    # proxy = ServerOnly(servermanager.Proxy | None)
 
-    def update_info(self):
-        if self.proxy is None:
-            return
+    # def update_info(self):
+    #     if self.proxy is None:
+    #         return
 
-        info = self.proxy.GetDataInformation()
-        self.bounds = info.DataInformation.GetBounds()
-        self.memory = info.DataInformation.GetMemorySize()
-        self.type = info.GetDataSetTypeAsString()
+    #     info = self.proxy.GetDataInformation()
+    #     self.bounds = info.DataInformation.GetBounds()
+    #     self.memory = info.DataInformation.GetMemorySize()
+    #     self.type = info.GetDataSetTypeAsString()
 
-        names = set()
-        names.update(data.extract_arrays(self.proxy.GetPointDataInformation()))
-        names.update(data.extract_arrays(self.proxy.GetCellDataInformation()))
-        names.update(data.extract_arrays(self.proxy.GetFieldDataInformation()))
-        self.arrays = list(names)
+    #     names = set()
+    #     names.update(data.extract_arrays(self.proxy.GetPointDataInformation()))
+    #     names.update(data.extract_arrays(self.proxy.GetCellDataInformation()))
+    #     names.update(data.extract_arrays(self.proxy.GetFieldDataInformation()))
+    #     self.arrays = list(names)

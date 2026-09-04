@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from paraview import simple
 from trame.ui.html import DivLayout
-from trame.widgets import paraview as pvw
+from trame.widgets import vtk as vtkw
 from trame.widgets import vuetify3 as v3
 
 from tomviz_trame.app.data_model import WindowInternalState
+from tomviz_trame.app.pipelines.vtk.view import View
 
 VIEW_COLORS = [
     "#2196F3",  # blue
@@ -31,11 +31,9 @@ def next_color():
 
 class RenderWindow(DivLayout):
     def __init__(self, server, **kwargs):
-        self.pv_view = simple.CreateRenderView()
-        self.pv_view.GetRenderWindow().SetOffScreenRendering(True)
-        super().__init__(
-            server, template_name=f"view_{self.pv_view.GetGlobalIDAsString()}"
-        )
+        self.vtk_view = View()
+
+        super().__init__(server, template_name=f"view_{self.vtk_view.id}")
         self.local_state = WindowInternalState(self.server, color=next_color())
         self.style = f"background: {self.local_state.color};"
 
@@ -49,8 +47,8 @@ class RenderWindow(DivLayout):
             v3.VCard(tile=True, classes="w-100 h-100 position-relative", **kwargs),
         ):
             with self.local_state.provide_as("rw_data"):
-                self.window = pvw.VtkRemoteView(
-                    self.pv_view,
+                self.window = vtkw.VtkRemoteView(
+                    self.vtk_view.render_window,
                     interactive_ratio=1,
                     interactor_events=("['EndAnimation', 'LeftButtonPress']",),
                     LeftButtonPress="active_view_id = rw_data._id",
@@ -98,7 +96,7 @@ class RenderWindow(DivLayout):
                     )
 
         # Attach pv + widget on state
-        self.local_state.pv_view = self.pv_view
+        self.local_state.vtk_view = self.vtk_view
         self.local_state.widget_view = self.window
 
     @property
@@ -137,25 +135,34 @@ class RenderWindow(DivLayout):
             ("mdi-rotate-right", (self.rotate, "[-90]"), EXPANDED, EMPTY),
             (
                 "mdi-axis-arrow",
-                (self.reset_camera_orientation, "['ApplyIsometricView']"),
+                (self.reset_camera_orientation, "['apply_isometric_view']"),
                 EXPANDED,
                 EMPTY,
             ),
             (
                 "mdi-axis-x-arrow",
-                (self.reset_camera_orientation, "['ResetActiveCameraToPositiveX']"),
+                (
+                    self.reset_camera_orientation,
+                    "['reset_active_camera_to_positive_x']",
+                ),
                 EXPANDED,
                 EMPTY,
             ),
             (
                 "mdi-axis-y-arrow",
-                (self.reset_camera_orientation, "['ResetActiveCameraToPositiveY']"),
+                (
+                    self.reset_camera_orientation,
+                    "['reset_active_camera_to_positive_y']",
+                ),
                 EXPANDED,
                 EMPTY,
             ),
             (
                 "mdi-axis-z-arrow",
-                (self.reset_camera_orientation, "['ResetActiveCameraToPositiveZ']"),
+                (
+                    self.reset_camera_orientation,
+                    "['reset_active_camera_to_positive_z']",
+                ),
                 EXPANDED,
                 EMPTY,
             ),
@@ -168,17 +175,17 @@ class RenderWindow(DivLayout):
         self.window.update()
 
     def rotate(self, angle):
-        self.pv_view.AdjustRoll(angle)
+        self.vtk_view.adjust_roll(angle)
         self.render()
 
     def reset_camera_orientation(self, action):
-        getattr(self.pv_view, action)()
+        getattr(self.vtk_view, action)()
         self.reset_camera()
 
     @property
     def tpl_name(self):
-        return f"view_{self.pv_id}"
+        return f"view_{self.vtk_id}"
 
     @property
-    def pv_id(self):
-        return self.pv_view.GetGlobalIDAsString()
+    def vtk_id(self):
+        return self.vtk_view.id
