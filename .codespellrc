@@ -1,2 +1,2 @@
 [codespell]
-skip = **/package-lock.json,CHANGELOG.md
+skip = **/package-lock.json,CHANGELOG.md,src/tomviz_trame/app/pipelines/vtk/presets.json

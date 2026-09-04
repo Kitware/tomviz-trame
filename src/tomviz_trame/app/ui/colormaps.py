@@ -1,9 +1,4 @@
-import base64
-
-from paraview import simple
-from vtkmodules.vtkCommonCore import vtkUnsignedCharArray
-from vtkmodules.vtkCommonDataModel import vtkImageData
-from vtkmodules.vtkIOImage import vtkPNGWriter
+from trame_colormaps.core import presets
 
 from tomviz_trame.app import data_model
 from tomviz_trame.app.utils.colors import Color
@@ -27,57 +22,11 @@ def color_to_float_rgb(color: str) -> Color:
 
 def generate_colormaps(server):
     color_maps = {}
-    samples = 255
-    rgb = [0, 0, 0]
-    names = simple.ListColorPresetNames()
-    lut = simple.GetColorTransferFunction("to_generate_image")
-    vtk_lut = lut.GetClientSideObject()
-    colorArray = vtkUnsignedCharArray()
-    colorArray.SetNumberOfComponents(3)
-    colorArray.SetNumberOfTuples(samples)
-    imgData = vtkImageData()
-    imgData.SetDimensions(samples, 1, 1)
-    imgData.GetPointData().SetScalars(colorArray)
-    writer = vtkPNGWriter()
-    writer.WriteToMemoryOn()
-    writer.SetInputData(imgData)
-    writer.SetCompressionLevel(1)
-
-    for name in names:
-        imgs = []
-        colors = []
-        for inverted in range(2):
-            lut.ApplyPreset(name, True)
-            if inverted:
-                lut.InvertTransferFunction()
-
-            v_min = lut.RGBPoints[0]
-            v_max = lut.RGBPoints[-4]
-            step = (v_max - v_min) / (samples - 1)
-
-            for i in range(samples):
-                value = v_min + step * float(i)
-                vtk_lut.GetColor(value, rgb)
-                r, g, b = rgb
-
-                if inverted == 0:
-                    colors.append((r, g, b))
-
-                r = int(round(r * 255))
-                g = int(round(g * 255))
-                b = int(round(b * 255))
-                colorArray.SetTuple3(i, r, g, b)
-
-            writer.Write()
-            img_bytes = writer.GetResult()
-
-            base64_img = base64.standard_b64encode(img_bytes).decode("utf-8")
-            imgs.append(f"data:image/png;base64,{base64_img}")
-
+    for name, imgs in presets.COLORBAR_CACHE.items():
         color_maps[name] = {
             "name": name,
-            "colors": colors,
-            "imgs": tuple(imgs),
+            "colors": [],  # FIXME
+            "imgs": tuple(imgs.values()),
         }
 
     server.state.palette = COLOR_PALETTE

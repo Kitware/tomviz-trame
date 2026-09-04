@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from paraview import servermanager
 from trame.app.dataclass import (
     ServerOnly,
     StateDataModel,
@@ -9,6 +8,11 @@ from trame.app.dataclass import (
     watch,
 )
 
+from tomviz_trame.app.pipelines.vtk.core import (
+    Algorithm,
+    LookupTable,
+    PiecewiseFunction,
+)
 from tomviz_trame.app.utils import colors as util_colors
 from tomviz_trame.app.utils import data
 
@@ -44,22 +48,16 @@ class SourceProxy(StateDataModel):
     pipelines = Sync(list[str], list)  # !(str -> SourceProxy) [source_proxy_id, ...]
 
     # Server only fields
-    proxy = ServerOnly(servermanager.Proxy | None)
+    algo = ServerOnly(Algorithm | None)
 
     def update_info(self):
-        if self.proxy is None:
+        if self.algo is None:
             return
 
-        info = self.proxy.GetDataInformation()
-        self.bounds = info.DataInformation.GetBounds()
-        self.memory = info.DataInformation.GetMemorySize()
-        self.type = info.GetDataSetTypeAsString()
-
-        names = set()
-        names.update(data.extract_arrays(self.proxy.GetPointDataInformation()))
-        names.update(data.extract_arrays(self.proxy.GetCellDataInformation()))
-        names.update(data.extract_arrays(self.proxy.GetFieldDataInformation()))
-        self.arrays = list(names)
+        self.bounds = self.algo.bounds
+        self.memory = self.algo.memory
+        self.type = self.algo.type
+        self.arrays = self.algo.field_names
 
 
 class Pipeline(StateDataModel):
@@ -93,8 +91,8 @@ class ColorOpacity(StateDataModel):
 
     # Server side
     source = ServerOnly(SourceProxy | None)
-    lut = ServerOnly(servermanager.Proxy | None)
-    pwf = ServerOnly(servermanager.Proxy | None)
+    lut = ServerOnly(LookupTable | None)
+    pwf = ServerOnly(PiecewiseFunction | None)
 
     @watch(
         "color_range",
@@ -128,10 +126,10 @@ class ColorOpacity(StateDataModel):
         self.scaled_colors = color_nodes
 
         if self.lut:
-            self.lut.ApplyPreset(active_color_preset)
+            self.lut.apply_preset(active_color_preset)
             if invert_color_preset:
-                self.lut.InvertTransferFunction()
-            self.lut.RescaleTransferFunction(*color_range)
+                self.lut.invert()
+            self.lut.rescale(*color_range)
 
     @watch("active_data_array")
     def _on_active_data_array_change(self, *_):
@@ -164,19 +162,18 @@ class ColorOpacity(StateDataModel):
         if self.source is None:
             return
 
-        pv_source_proxy = self.source.proxy
+        source_algo = self.source.algo
 
-        if pv_source_proxy is None:
+        if source_algo is None:
             return
 
-        self.data_arrays = data.extract_arrays(
-            pv_source_proxy.GetPointDataInformation()
-        )
+        self.data_arrays = list(source_algo.dataset.point_data.keys())
+
         histograms = []
         if len(self.data_arrays):
             self.active_data_array = self.data_arrays[0]
             histograms = data.extract_histograms(
-                pv_source_proxy, self.active_data_array, 128, True
+                source_algo, self.active_data_array, 128, True
             )
         else:
             self.active_data_array = ""
@@ -192,13 +189,11 @@ class ColorOpacity(StateDataModel):
         if self.source is None:
             return
 
-        if self.source.proxy is None:
+        if self.source.algo is None:
             return
 
         # Update data related info
-        array = self.source.proxy.GetPointDataInformation().GetArray(
-            self.active_data_array
-        )
+        array = self.source.algo.dataset.point_data[self.active_data_array]
         data_range = array.GetRange()
         v_min, v_max = data_range
         step = max((v_max - v_min) / 255, 1)
@@ -210,8 +205,8 @@ def create_default_color_opacity(source: SourceProxy) -> ColorOpacity:
     color_opacity = ColorOpacity(
         source.server,
         source=source,
-        lut=servermanager.rendering.PVLookupTable(),
-        pwf=servermanager.piecewise_functions.PiecewiseFunction(),
+        lut=LookupTable(),
+        pwf=PiecewiseFunction(),
     )
     color_opacity.pull()
 

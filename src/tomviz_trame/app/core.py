@@ -2,7 +2,7 @@ from trame.app import TrameApp
 from trame.decorators import life_cycle
 from trame.ui.vuetify3 import VAppLayout
 from trame.widgets import dockview, html
-from trame.widgets import paraview as pvw
+from trame.widgets import vtk as vtkw
 from trame.widgets import vuetify3 as v3
 
 from tomviz_trame.app import cli, module, ui
@@ -49,7 +49,7 @@ class Tomviz(TrameApp):
         # Create UI for all representation types
 
         ui.initialize_dynamic_ui(self.server)
-        pvw.initialize(self.server)
+        vtkw.initialize(self.server)
 
         with VAppLayout(
             self.server,
