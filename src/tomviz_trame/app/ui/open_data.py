@@ -1,7 +1,5 @@
-import re
 from pathlib import Path
 
-from paraview import simple
 from trame.widgets import html
 from trame.widgets import vuetify3 as v3
 
@@ -35,28 +33,11 @@ def to_suffix(e):
 # -----------------------------------------------------------------------------
 
 
-class ParaViewFileBrowser:
-    def __init__(
-        self,
-        home=None,
-        current=None,
-        exclude=r"^\.|~$|^\$",
-        group=r"[0-9]+\.",
-    ):
-        self._enable_groups = False
+class FileBrowser:
+    def __init__(self, home=None, current=None):
+        self._enable_groups = True
         self._home_path = Path(home).resolve() if home else Path.home()
         self._current_path = Path(current).resolve() if current else self._home_path
-        self.pattern_exclude = re.compile(exclude)
-        self.pattern_group = re.compile(group)
-
-        self._pxm = simple.servermanager.ProxyManager()
-        self._proxy_listing = self._pxm.NewProxy("misc", "ListDirectory")
-        self._proxy_directories = simple.servermanager.VectorProperty(
-            self._proxy_listing, self._proxy_listing.GetProperty("DirectoryList")
-        )
-        self._proxy_files = simple.servermanager.VectorProperty(
-            self._proxy_listing, self._proxy_listing.GetProperty("FileList")
-        )
 
     @property
     def enable_groups(self):
@@ -70,82 +51,20 @@ class ParaViewFileBrowser:
     def listing(self):
         directories = []
         files = []
-        groups = []
-        g_map = {}
-
-        self._proxy_listing.List(str(self._current_path.resolve()))
-        self._proxy_listing.UpdatePropertyInformation()
-
-        # Files + Groups
-        file_listing = []
-        if len(self._proxy_files) > 1:
-            file_listing = self._proxy_files.GetData()
-        if len(self._proxy_files) == 1:
-            file_listing.append(self._proxy_files.GetData())
-        file_listing = [
-            file_name
-            for file_name in file_listing
-            if not re.search(self.pattern_exclude, file_name)
-        ]
-        for file_name in file_listing:
-            f = self._current_path / file_name
-            stats = f.stat()
-
-            # Group or file?
-            file_split = re.split(self.pattern_group, file_name)
-            if self.enable_groups and len(file_split) == 2:
-                # Group
-                g_name = "*.".join(file_split)
-                if g_name not in g_map:
-                    g_entry = dict(
-                        name=g_name,
-                        modified=stats.st_mtime,
-                        size=0,
-                        files=[],
-                        **GROUP,
-                    )
-                    g_map[g_name] = g_entry
-                    groups.append(g_entry)
-
-                g_map[g_name]["size"] += stats.st_size
-                g_map[g_name]["files"].append(file_name)
-                # Many need to sort files???
-            else:
-                # File
-                files.append(
-                    dict(
-                        name=f.name,
-                        modified=stats.st_mtime,
-                        size=stats.st_size,
-                        **FILE,
-                    )
-                )
-
-        # Directories
-        dir_listing = []
-        if len(self._proxy_directories) > 1:
-            dir_listing = self._proxy_directories.GetData()
-        if len(self._proxy_directories) == 1:
-            dir_listing.append(self._proxy_directories.GetData())
-        dir_listing = [
-            dir_name
-            for dir_name in dir_listing
-            if not re.search(self.pattern_exclude, dir_name)
-        ]
-        for dir_name in dir_listing:
-            f = self._current_path / dir_name
-            directories.append(
-                dict(name=f.name, modified=f.stat().st_mtime, **DIRECTORY)
-            )
+        for f in self._current_path.iterdir():
+            if f.name[0] == ".":
+                continue
+            entry = {"name": f.name, "modified": f.stat().st_mtime}
+            if f.is_dir():
+                directories.append({**entry, **DIRECTORY})
+            elif f.is_file():
+                files.append({**entry, **FILE, "size": f.stat().st_size})
 
         # Sort content
         directories.sort(key=sort_by_name)
-        groups.sort(key=sort_by_name)
         files.sort(key=sort_by_name)
 
-        return [
-            {**e, "index": i} for i, e in enumerate([*directories, *groups, *files])
-        ]
+        return [{**e, "index": i} for i, e in enumerate([*directories, *files])]
 
     def open_entry(self, entry):
         entry_type = entry.get("type")
@@ -166,6 +85,12 @@ class ParaViewFileBrowser:
     def to_file(self, entry):
         return self._current_path / entry.get("name")
 
+    def open_dataset(self, entry):
+        return self._current_path / entry.get("name")
+
+    def open_state(self, entry):
+        return self._current_path / entry.get("name")
+
 
 class FileLoader(v3.VDialog):
     def __init__(
@@ -178,7 +103,7 @@ class FileLoader(v3.VDialog):
         self._file_ext = [".tif", ".tiff"]
 
         # Initialize file browser
-        self._file_browser = ParaViewFileBrowser(current=Path.cwd())
+        self._file_browser = FileBrowser(current=Path.cwd())
 
         # Fill content
         self._update_listing()

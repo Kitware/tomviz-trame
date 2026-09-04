@@ -5,11 +5,11 @@ from enum import Enum
 from pathlib import Path
 
 from loguru import logger
-from paraview import servermanager, simple
 from trame.app import TrameComponent
 from trame.decorators import trigger
 
 from tomviz_trame.app import data_model, module, operators, ui
+from tomviz_trame.app.pipelines.vtk import io
 from tomviz_trame.app.ui.dynamic import DYNAMIC_TEMPLATES
 from tomviz_trame.paraview import load_plugins
 
@@ -66,7 +66,6 @@ class PipelineManager(TrameComponent):
         self.representations = {}  # { view_id: [rep, ...] }
         self.views = {}
         self.pending_tasks = set()
-        self.pxm = servermanager.ProxyManager()
         self.tree = data_model.Pipeline(self.server)
         self.state.property_templates = []
         self.state.active_view_id = None
@@ -91,12 +90,9 @@ class PipelineManager(TrameComponent):
             return None
 
         # Create reader and track it
-        reader = servermanager._getPyProxy(
-            simple.TIFFSeriesReader(FileNames=[str(file_path)])
-        )
-        reader.UpdatePipeline()
+        reader = io.Reader(file_path)
         dataset = data_model.SourceProxy(self.server, name=file_path.stem)
-        dataset.proxy = reader
+        dataset.algo = reader
         dataset.update_info()
 
         self.add_default_color_opacity(dataset._id)
@@ -114,9 +110,10 @@ class PipelineManager(TrameComponent):
 
     def add_view(self) -> str:
         view = ui.RenderWindow(self.server)
+        logger.debug("Add view {} vs {}", view.local_state._id, view.vtk_id)
         self.views[view.local_state._id] = view
         self.ctx.dock_view.add_panel(
-            view.pv_id,
+            view.vtk_id,
             "3D View",
             view.tpl_name,
             tabComponent="tomviz-dockview-tab",
@@ -135,14 +132,17 @@ class PipelineManager(TrameComponent):
         # - remove view in self.views
         view = self.views.get(view_id)
         if view:
-            self.ctx.dock_view.remove_panel(view.pv_id)
+            view.vtk_view.clear()
+            self.ctx.dock_view.remove_panel(view.vtk_id)
             self.state.active_view_id = None
+            del self.representations[view_id]
+            del self.views[view.local_state._id]
 
     def activate_panel(self, panel_id):
         logger.debug("activate_panel {}", panel_id)
         found = False
         for view_id, view in self.views.items():
-            if view.pv_id == panel_id:
+            if view.vtk_id == panel_id:
                 self.state.active_view_id = view_id
                 found = True
 
@@ -162,7 +162,7 @@ class PipelineManager(TrameComponent):
         """Register all views into dockview"""
         for view in self.views.values():
             self.ctx.dock_view.add_panel(
-                view.pv_id,
+                view.vtk_id,
                 "3D View",
                 view.tpl_name,
                 tabComponent="tomviz-dockview-tab",
