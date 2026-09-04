@@ -8,10 +8,9 @@ from loguru import logger
 from trame.app import TrameComponent
 from trame.decorators import trigger
 
-from tomviz_trame.app import data_model, module, operators, ui
+from tomviz_trame.app import data_model, module, ui
 from tomviz_trame.app.pipelines.vtk import io
 from tomviz_trame.app.ui.dynamic import DYNAMIC_TEMPLATES
-from tomviz_trame.paraview import load_plugins
 
 
 class RepresentationType(Enum):
@@ -77,8 +76,6 @@ class PipelineManager(TrameComponent):
 
         if self.server.hot_reload:
             self.server.controller.on_server_reload.add(self.refresh_views_later)
-
-        load_plugins(ns=globals())
 
     def __del__(self):
         self.tree.clear_watchers()
@@ -222,18 +219,21 @@ class PipelineManager(TrameComponent):
         meta: dict,
         **_,
     ):
-        input = data_model.get_instance(data_id)
-        operator_proxy = simple.TomvizVolumeTransform(Input=input.proxy)
-        operator_filter = data_model.Operator(
-            self.server,
-            name=operator_name,
-            proxy=operator_proxy,
-            color_opacity=data_model.create_default_color_opacity(input),
-            icon=icon,
-            data=operators.to_operator_data(self.server, meta),
+        logger.critical(
+            "Add Operator: {}, {}, {}, {}", data_id, operator_name, icon, meta
         )
+        # input = data_model.get_instance(data_id)
+        # operator_proxy = simple.TomvizVolumeTransform(Input=input.proxy)
+        # operator_filter = data_model.Operator(
+        #     self.server,
+        #     name=operator_name,
+        #     proxy=operator_proxy,
+        #     color_opacity=data_model.create_default_color_opacity(input),
+        #     icon=icon,
+        #     data=operators.to_operator_data(self.server, meta),
+        # )
 
-        input.pipelines = [*input.pipelines, operator_filter]
+        # input.pipelines = [*input.pipelines, operator_filter]
 
     def _on_active_change(self, active_node: list[str]):
         logger.debug("active_node: {}", active_node)
