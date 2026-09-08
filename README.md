@@ -1,6 +1,6 @@
 # tomviz-trame
 
-ParaView and Trame based tomviz
+trame and VTK based web version of the tomviz tomography application
 
 ![tomviz](https://raw.githubusercontent.com/Kitware/tomviz-trame/main/tomviz.png)
 
@@ -21,7 +21,7 @@ uv pip install .
 Run the application
 
 ```sh
-pvpython --venv .venv -m tomviz
+python -m tomviz --server
 ```
 
 ## Development setup

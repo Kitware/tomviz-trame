@@ -8,10 +8,13 @@ from trame.app.dataclass import (
 )
 from trame.widgets.vtk import VtkRemoteView
 
-from tomviz_trame.app.pipelines.vtk.view import View
+from tomviz_trame.app.pipeline.vtk.view import View
 
 
-class WindowInternalState(StateDataModel):
+class ViewModel(StateDataModel):
+    """UI state of one render window, wrapping the VTK ``View`` and the
+    ``VtkRemoteView`` widget that streams it."""
+
     color = Sync(str)
     interactive_3d = Sync(bool, True)
     expanded = Sync(bool, False)

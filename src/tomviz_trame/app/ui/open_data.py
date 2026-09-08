@@ -3,6 +3,8 @@ from pathlib import Path
 from trame.widgets import html
 from trame.widgets import vuetify3 as v3
 
+from tomviz_trame.app.pipeline.nodes import SUPPORTED_EXTENSIONS
+
 # -----------------------------------------------------------------------------
 # Utils
 # -----------------------------------------------------------------------------
@@ -99,8 +101,8 @@ class FileLoader(v3.VDialog):
     ):
         super().__init__(v_model=("tomviz_file_loader", False))
 
-        # State file extensions
-        self._file_ext = [".tif", ".tiff"]
+        # What the reader node can open
+        self._file_ext = SUPPORTED_EXTENSIONS
 
         # Initialize file browser
         self._file_browser = FileBrowser(current=Path.cwd())

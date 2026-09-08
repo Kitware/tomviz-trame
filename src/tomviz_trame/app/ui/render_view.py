@@ -4,8 +4,8 @@ from trame.ui.html import DivLayout
 from trame.widgets import vtk as vtkw
 from trame.widgets import vuetify3 as v3
 
-from tomviz_trame.app.data_model import WindowInternalState
-from tomviz_trame.app.pipelines.vtk.view import View
+from tomviz_trame.app.data_model import ViewModel
+from tomviz_trame.app.pipeline.vtk.view import View
 
 VIEW_COLORS = [
     "#2196F3",  # blue
@@ -34,7 +34,7 @@ class RenderWindow(DivLayout):
         self.vtk_view = View()
 
         super().__init__(server, template_name=f"view_{self.vtk_view.id}")
-        self.local_state = WindowInternalState(self.server, color=next_color())
+        self.local_state = ViewModel(self.server, color=next_color())
         self.style = f"background: {self.local_state.color};"
 
         # Make new view active by default

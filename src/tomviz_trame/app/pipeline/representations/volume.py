@@ -1,28 +1,28 @@
 from __future__ import annotations
 
 import vtkmodules.vtkRenderingVolumeOpenGL2  # noqa: F401 (register GPU volume mapper)
-from trame_client.widgets.core import TrameComponent
 from vtkmodules.vtkRenderingCore import vtkVolume, vtkVolumeProperty
 from vtkmodules.vtkRenderingVolume import vtkGPUVolumeRayCastMapper
 
 from tomviz_trame.app import data_model
-from tomviz_trame.app.pipelines.core import RepresentationType
-from tomviz_trame.app.pipelines.representations.core import RepresentationBase
+from tomviz_trame.app.pipeline.representations.core import (
+    Representation,
+    RepresentationType,
+)
 
 # VTK only has Nearest(0)/Linear(1) volume interpolation, "Cubic" from the UI
 # falls back to Linear.
 _INTERPOLATION_FROM_VTK = {0: "Nearest", 1: "Linear"}
 
 
-class VolumeRepresentation(TrameComponent, RepresentationBase):
+class VolumeRepresentation(Representation):
     def __init__(
         self,
         pipeline_manager,
-        source_proxy: data_model.SourceProxy,
-        view: data_model.WindowInternalState,
+        source_port: data_model.OutputPortModel,
+        view: data_model.ViewModel,
     ):
-        view_proxy = view.vtk_view
-        super().__init__(server=pipeline_manager.server)
+        super().__init__(pipeline_manager.server)
 
         self.property = vtkVolumeProperty()
         self.property.SetInterpolationTypeToLinear()
@@ -32,15 +32,15 @@ class VolumeRepresentation(TrameComponent, RepresentationBase):
         self.mapper = vtkGPUVolumeRayCastMapper()
         self.actor = vtkVolume(mapper=self.mapper, property=self.property)
 
-        source_proxy.algo.algo >> self.mapper
-        view_proxy.add_representation(self)
+        self.producer >> self.mapper
+        self.attach(view.vtk_view)
 
-        self.props = data_model.VolumeProperties(
+        self.model = data_model.VolumeSinkNodeModel(
             self.server,
-            input=source_proxy,
+            source_port=source_port,
             view=view,
             representation=self,
-            **RepresentationType.VOLUME.props,
+            **RepresentationType.VOLUME.model_kwargs,
         )
 
     @property

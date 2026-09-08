@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from trame_client.widgets.core import TrameComponent
 from vtkmodules.vtkCommonDataModel import vtkPlane
 from vtkmodules.vtkFiltersCore import vtkFlyingEdgesPlaneCutter
 from vtkmodules.vtkRenderingCore import (
@@ -9,10 +8,12 @@ from vtkmodules.vtkRenderingCore import (
 )
 
 from tomviz_trame.app import data_model
-from tomviz_trame.app.pipelines.core import RepresentationType
-from tomviz_trame.app.pipelines.representations.core import RepresentationBase
+from tomviz_trame.app.pipeline.representations.core import (
+    Representation,
+    RepresentationType,
+)
 
-# Axis index for each entry of SliceProperties.SliceDirections
+# Axis index for each entry of SliceSinkNodeModel.SliceDirections
 AXIS_BY_DIRECTION = {
     "YZ Plane": 0,
     "XZ Plane": 1,
@@ -20,17 +21,15 @@ AXIS_BY_DIRECTION = {
 }
 
 
-class SliceRepresentation(TrameComponent, RepresentationBase):
+class SliceRepresentation(Representation):
     def __init__(
         self,
         pipeline_manager,
-        source_proxy: data_model.SourceProxy,
-        view: data_model.WindowInternalState,
+        source_port: data_model.OutputPortModel,
+        view: data_model.ViewModel,
     ):
-        view_proxy = view.vtk_view
-        super().__init__(server=pipeline_manager.server)
+        super().__init__(pipeline_manager.server)
 
-        self.source_proxy = source_proxy
         self._slice = 0
         self._slice_direction = "XY Plane"
 
@@ -38,26 +37,20 @@ class SliceRepresentation(TrameComponent, RepresentationBase):
         self.extract = vtkFlyingEdgesPlaneCutter(plane=self.plane)
         self.mapper = vtkPolyDataMapper()
         self.actor = vtkActor(mapper=self.mapper)
-        source_proxy.algo.algo >> self.extract >> self.mapper
-        view_proxy.add_representation(self)
+        self.producer >> self.extract >> self.mapper
+        self.attach(view.vtk_view)
 
-        self._update_plane()
-
-        self.props = data_model.SliceProperties(
+        self.model = data_model.SliceSinkNodeModel(
             self.server,
-            input=source_proxy,
+            source_port=source_port,
             view=view,
             representation=self,
-            **RepresentationType.SLICE.props,
+            **RepresentationType.SLICE.model_kwargs,
         )
 
-    @property
-    def input_extent(self):
-        dataset = self.source_proxy.algo.dataset
-        if dataset is None:
-            return [0, 0, 0, 0, 0, 0]
-
-        return list(dataset.GetExtent())
+    def set_input(self, image):
+        super().set_input(image)
+        self._update_plane()
 
     @property
     def Slice(self):
@@ -78,16 +71,16 @@ class SliceRepresentation(TrameComponent, RepresentationBase):
         self._update_plane()
 
     def _update_plane(self):
-        dataset = self.source_proxy.algo.dataset
-        if dataset is None:
+        image = self.image
+        if image is None:
             return
 
         axis = AXIS_BY_DIRECTION[self._slice_direction]
-        extent = dataset.GetExtent()
-        spacing = dataset.GetSpacing()
-        data_origin = dataset.GetOrigin()
+        extent = image.GetExtent()
+        spacing = image.GetSpacing()
+        data_origin = image.GetOrigin()
 
-        origin = list(dataset.GetCenter())
+        origin = list(image.GetCenter())
         origin[axis] = (
             data_origin[axis] + (extent[axis * 2] + self._slice) * spacing[axis]
         )

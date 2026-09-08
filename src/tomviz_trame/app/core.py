@@ -6,8 +6,8 @@ from trame.widgets import vtk as vtkw
 from trame.widgets import vuetify3 as v3
 
 from tomviz_trame.app import cli, module, ui
-from tomviz_trame.app.operators import Operators
-from tomviz_trame.app.pipelines import PipelineManager
+from tomviz_trame.app.catalog import Catalog
+from tomviz_trame.app.pipeline import PipelineManager
 from tomviz_trame.app.ui.colormaps import generate_colormaps
 
 
@@ -22,9 +22,9 @@ class Tomviz(TrameApp):
         self.ctx.colormaps = generate_colormaps(self.server)
         self.state.colormaps_id = self.ctx.colormaps._id
         self.state.show_color_opacity = True
-        self.ctx.operators = Operators(
+        self.ctx.catalog = Catalog(
             server=self.server,
-            config_file=args.operators,
+            config_file=args.catalog,
             read_only=args.read_only,
         )
 
@@ -81,11 +81,11 @@ class Tomviz(TrameApp):
                 permanent=True,
             ):
                 with html.Div(
-                    v_if=("select_operator", False),
+                    v_if=("select_transform", False),
                     classes="px-2 pt-2 d-flex flex-column",
                     style="max-height: calc(100vh - 48px)",
                 ):
-                    ui.OperatorSelection()
+                    ui.TransformSelection()
                 with html.Div(
                     classes="px-2 pt-2 d-flex flex-column",
                     style="max-height: calc(100vh - 48px)",

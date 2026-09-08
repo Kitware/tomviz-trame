@@ -28,10 +28,10 @@ class PipelineSection(html.Div):
                     variant="flat",
                     v_show=("show_pipeline", True),
                 ):
-                    with self.ctx.pipeline.tree.provide_as("pipeline"):
+                    with self.ctx.pipeline.model.provide_as("pipeline"):
                         with v3.VList(
-                            items=("pipeline.children",),
-                            item_title="name",
+                            items=("pipeline.roots",),
+                            item_title="label",
                             item_value="_id",
                             rounded=True,
                             slim=True,
@@ -54,7 +54,7 @@ class PipelineSection(html.Div):
                                         with v3.VListItem(
                                             classes="px-2 no-select",
                                             tile=True,
-                                            title=("item.name",),
+                                            title=("item.label",),
                                             value=("item._id",),
                                         ):
                                             with v3.Template(v_slot_append=True):
@@ -68,7 +68,7 @@ class PipelineSection(html.Div):
                                                     density="compact",
                                                     variant="plain",
                                                     classes="ml-1",
-                                                    v_on_click_prevent_stop="select_operator = true; active_data_id = item._id;",
+                                                    v_on_click_prevent_stop="select_transform = true; active_data_id = item._id;",
                                                 )
                                             with v3.Template(v_slot_prepend=True):
                                                 v3.VBtn(
@@ -92,11 +92,11 @@ class PipelineSection(html.Div):
                                                     v_model_activated=(
                                                         "pipeline.active_node",
                                                     ),
-                                                    items=("item.pipelines",),
+                                                    items=("item.downstream",),
                                                     density="compact",
                                                     item_value="_id",
-                                                    item_title="name",
-                                                    item_children="pipelines",
+                                                    item_title="label",
+                                                    item_children="downstream",
                                                     activatable=True,
                                                     open_on_click=True,
                                                     indent=10,
@@ -119,11 +119,24 @@ class PipelineSection(html.Div):
                                                             density="compact",
                                                             variant="plain",
                                                             classes="ml-1",
-                                                            v_on_click_prevent_stop="select_operator = true; active_data_id = item._id;",
+                                                            v_on_click_prevent_stop="select_transform = true; active_data_id = item._id;",
                                                         )
-                                                with v3.Template(
-                                                    v_for="representations, view_id in item.representations",
-                                                    key="view_id",
+                                                # Sinks of every node in the chain
+                                                # are listed under the root, like
+                                                # the desktop app's modules.
+                                                with (
+                                                    v3.Template(
+                                                        v_for="node_id in [item._id, ...item.downstream.map((n) => n._id)]",
+                                                        key="node_id",
+                                                    ),
+                                                    dataclass.Provider(
+                                                        name="node",
+                                                        instance=("node_id",),
+                                                    ),
+                                                    v3.Template(
+                                                        v_for="sinks, view_id in node.sinks",
+                                                        key="view_id",
+                                                    ),
                                                 ):
                                                     with dataclass.Provider(
                                                         name="view",
@@ -140,7 +153,7 @@ class PipelineSection(html.Div):
                                                         ):
                                                             v3.VBtn(
                                                                 icon=(
-                                                                    "item.expand_representations.includes(view_id) ? 'mdi-chevron-up' : 'mdi-chevron-down'",
+                                                                    "node.expand_sinks.includes(view_id) ? 'mdi-chevron-up' : 'mdi-chevron-down'",
                                                                 ),
                                                                 ripple=False,
                                                                 block=True,
@@ -148,7 +161,7 @@ class PipelineSection(html.Div):
                                                                 variant="plain",
                                                                 density="compact",
                                                                 size="x-small",
-                                                                click="item.expand_representations = (item.expand_representations.includes(view_id) ? item.expand_representations.filter((v) => v !== view_id) : [...item.expand_representations, view_id])",
+                                                                click="node.expand_sinks = (node.expand_sinks.includes(view_id) ? node.expand_sinks.filter((v) => v !== view_id) : [...node.expand_sinks, view_id])",
                                                             )
                                                             with v3.VExpandTransition():
                                                                 with v3.VList(
@@ -156,25 +169,25 @@ class PipelineSection(html.Div):
                                                                     classes="py-0",
                                                                     activatable=True,
                                                                     v_model_activated="pipeline.active_node",
-                                                                    v_if="item.expand_representations.includes(view_id)",
+                                                                    v_if="node.expand_sinks.includes(view_id)",
                                                                 ):
                                                                     with v3.Template(
-                                                                        v_for="rep, r_idx in representations",
-                                                                        key="r_idx",
+                                                                        v_for="sink, s_idx in sinks",
+                                                                        key="s_idx",
                                                                     ):
                                                                         with dataclass.Provider(
-                                                                            name="rep",
+                                                                            name="sink",
                                                                             instance=(
-                                                                                "rep",
+                                                                                "sink",
                                                                             ),
                                                                         ):
                                                                             with v3.VListItem(
                                                                                 title=[
-                                                                                    "rep.label"
+                                                                                    "sink.label"
                                                                                 ],
                                                                                 classes="representation px-2",
                                                                                 value=(
-                                                                                    "rep._id",
+                                                                                    "sink._id",
                                                                                 ),
                                                                             ):
                                                                                 with v3.Template(
@@ -182,7 +195,7 @@ class PipelineSection(html.Div):
                                                                                 ):
                                                                                     v3.VAvatar(
                                                                                         image=[
-                                                                                            "rep.icon"
+                                                                                            "sink.icon"
                                                                                         ],
                                                                                         tile=True,
                                                                                         size="small",
@@ -195,9 +208,9 @@ class PipelineSection(html.Div):
                                                                                 ):
                                                                                     v3.VBtn(
                                                                                         icon=(
-                                                                                            "rep.Visibility ? 'mdi-eye-outline' : 'mdi-eye-off-outline'",
+                                                                                            "sink.Visibility ? 'mdi-eye-outline' : 'mdi-eye-off-outline'",
                                                                                         ),
                                                                                         density="compact",
                                                                                         variant="plain",
-                                                                                        v_on_click_prevent_stop="rep.Visibility = !rep.Visibility",
+                                                                                        v_on_click_prevent_stop="sink.Visibility = !sink.Visibility",
                                                                                     )

@@ -28,6 +28,13 @@ class ColorOpacityEditor(html.Div):
                             style="height: 15rem;",
                             v_model_colorNodes=("color_opacity.scaled_colors",),
                             v_model_opacityNodes=("color_opacity.scaled_opacities",),
+                            # Histogram nodes are normalized: x over the
+                            # data range as [0, 1] (like the color and
+                            # opacity nodes), y in histograms_range. With
+                            # background_shape="histograms" the widget paints
+                            # the preset gradient (scaled_colors) inside the
+                            # histogram silhouette: colored histograms.
+                            # show_histograms adds a flat overlay on top.
                             histograms=("color_opacity.scaled_histograms",),
                             histograms_range=("color_opacity.histograms_range",),
                             scalar_range=("default_scalar_range", [0, 1]),

@@ -5,10 +5,6 @@ from vtkmodules.vtkCommonDataModel import vtkPiecewiseFunction
 from vtkmodules.vtkRenderingCore import vtkColorTransferFunction
 
 
-class Algorithm:
-    def __init__(self): ...
-
-
 class PiecewiseFunction:
     def __init__(self):
         self.function = vtkPiecewiseFunction()

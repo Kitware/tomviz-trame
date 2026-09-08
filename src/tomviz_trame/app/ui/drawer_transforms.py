@@ -1,5 +1,6 @@
 import json
 
+from loguru import logger
 from trame.decorators import change
 from trame.widgets import dataclass, html
 from trame.widgets import vuetify3 as v3
@@ -7,17 +8,20 @@ from trame.widgets import vuetify3 as v3
 from tomviz_trame.app import data_model
 
 
-class OperatorSelection(html.Div):
+class TransformSelection(html.Div):
+    """The picker that appends a catalog transform to the active data node's
+    chain. Shown in the drawer while ``select_transform`` is set."""
+
     def __init__(self):
         super().__init__()
 
-        self.state.setdefault("operator_favorites", False)
+        self.state.setdefault("transform_favorites", False)
 
         with self:
             v3.VBtn(
                 prepend_icon="mdi-chevron-left",
-                text="Operators",
-                click="select_operator = false",
+                text="Transforms",
+                click="select_transform = false",
                 classes="w-100 text-none mb-1",
                 variant="tonal",
                 spaced="end",
@@ -32,13 +36,13 @@ class OperatorSelection(html.Div):
                 ),
             ):
                 v3.VLabel(
-                    "{{ active_input.name }}",
+                    "{{ active_input.label }}",
                     classes="text-subtitle-2 text-truncate mx-2 mt-2",
                 )
                 with html.Div(classes="d-flex pa-2 ga-2 align-center"):
                     v3.VTextField(
-                        placeholder="Search operators...",
-                        v_model=("operator_filter", ""),
+                        placeholder="Search transforms...",
+                        v_model=("transform_filter", ""),
                         prepend_inner_icon="mdi-magnify",
                         variant="outlined",
                         density="compact",
@@ -46,46 +50,46 @@ class OperatorSelection(html.Div):
                         clearable=True,
                     )
                     v3.VBtn(
-                        disabled=("operator_activated.length === 0",),
+                        disabled=("transform_activated.length === 0",),
                         classes="rounded",
                         icon="mdi-plus",
                         color="primary",
                         density="comfortable",
                         flat=True,
                         click=(
-                            self.create_operator,
-                            "[active_input._id, operator_activated[0]]",
+                            self.add_transform,
+                            "[active_input._id, transform_activated[0]]",
                         ),
                     )
                 with html.Div(
                     classes="d-flex mx-2 pa-1 ga-2 align-center justify-space-around bg-surface-light rounded",
                 ):
                     v3.VBtn(
-                        "All Operators",
-                        variant=("operator_favorites ? 'plain' : 'flat'",),
+                        "All Transforms",
+                        variant=("transform_favorites ? 'plain' : 'flat'",),
                         classes="text-none flex-fill",
-                        click="operator_favorites = false",
+                        click="transform_favorites = false",
                         density="comfortable",
                     )
                     v3.VBtn(
-                        "Favorites ({{ operator_favorite_count }})",
+                        "Favorites ({{ catalog_favorite_count }})",
                         prepend_icon="mdi-star",
-                        variant=("operator_favorites ? 'flat' : 'plain'",),
+                        variant=("transform_favorites ? 'flat' : 'plain'",),
                         classes="text-none flex-fill",
-                        click="operator_favorites = true",
+                        click="transform_favorites = true",
                         density="comfortable",
                     )
 
                 with (
-                    self.ctx.operators.root_node.provide_as("operator_root_node"),
+                    self.ctx.catalog.root.provide_as("catalog_root"),
                     html.Div(
                         style="height: calc(100vh - 14.8rem)",
                         classes="overflow-scroll mt-2",
                     ),
                     v3.VTreeview(
-                        v_model_opened=("operator_opened", []),
-                        v_model_activated=("operator_activated", []),
-                        items=("operator_root_node.children",),
+                        v_model_opened=("transform_opened", []),
+                        v_model_activated=("transform_activated", []),
+                        items=("catalog_root.children",),
                         density="compact",
                         item_value="_id",
                         activatable=True,
@@ -93,10 +97,10 @@ class OperatorSelection(html.Div):
                         indent=20,
                         hide_actions=True,
                         open_all=(
-                            "operator_favorites || (operator_filter|| '').length",
+                            "transform_favorites || (transform_filter|| '').length",
                         ),
                         search=(
-                            "operator_favorites ? `${operator_filter} ::fav::` : operator_filter",
+                            "transform_favorites ? `${transform_filter} ::fav::` : transform_filter",
                         ),
                         custom_filter=("utils.tomviz.treeFilter",),
                     ),
@@ -120,18 +124,18 @@ class OperatorSelection(html.Div):
                             v_on_click_prevent="item.favorite = !item.favorite",
                         )
 
-    def create_operator(self, input_id, operator_id):
-        operator_node = data_model.get_instance(operator_id)
-        self.ctx.pipeline.add_operator(
+    def add_transform(self, input_id, item_id):
+        item = data_model.get_instance(item_id)
+        self.ctx.pipeline.add_transform(
             input_id,
-            operator_node.name,
-            icon=operator_node.icon,
-            meta=operator_node.meta,
+            item.name,
+            icon=item.icon,
+            meta=item.meta,
         )
 
-    @change("operator_activated")
-    def _on_active(self, operator_activated, **_):
-        if operator_activated:
-            operator_node = data_model.get_instance(operator_activated[0])
-            if isinstance(operator_node, data_model.OperatorNode):
-                print(json.dumps(operator_node.meta, indent=2))
+    @change("transform_activated")
+    def _on_active(self, transform_activated, **_):
+        if transform_activated:
+            item = data_model.get_instance(transform_activated[0])
+            if isinstance(item, data_model.CatalogItem):
+                logger.debug("Catalog entry:\n{}", json.dumps(item.meta, indent=2))

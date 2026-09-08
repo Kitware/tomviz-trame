@@ -1,25 +1,62 @@
+"""Mirrors of the sink nodes that display data in a render view.
+
+``SinkNodeModel`` mirrors a ``RepresentationSinkNode``; one subclass exists
+per ``RepresentationType`` and carries the VTK properties its dynamic UI
+panel edits. ``pull()`` copies the VTK side into the synced fields and
+``push()`` writes them back."""
+
 from __future__ import annotations
 
 from collections.abc import Callable
 
 from loguru import logger
-from trame.app.dataclass import (
-    ServerOnly,
-    StateDataModel,
-    Sync,
-    TypeValidation,
-    watch,
-)
+from trame.app.dataclass import ServerOnly, Sync, TypeValidation, watch
 
-from tomviz_trame.app.data_model.pipeline import SourceProxy
-from tomviz_trame.app.pipelines.representations import outline, slice, volume
+from tomviz_trame.app.pipeline.representations.core import Representation
 
-from .pipeline import ColorOpacity, create_default_color_opacity
-from .view import WindowInternalState
+from .color_opacity import ColorOpacityModel, create_color_opacity
+from .node import NodeModel
+from .port import OutputPortModel
+from .view import ViewModel
 
 
-# -----------------------------------------------------------------------------
-class ViewMixin:
+class SinkNodeModel(NodeModel):
+    """Mirror of a sink node showing the data of ``source_port`` in ``view``."""
+
+    representation = ServerOnly(Representation | None)
+    representation_type = Sync(str, "")  # RepresentationType name, picks the UI
+    icon = Sync(str, "")
+    source_port = Sync(OutputPortModel, has_dataclass=True)
+    view = Sync(ViewModel, has_dataclass=True)
+
+    Visibility = Sync(bool, False)
+
+    def __init__(self, server, **kwargs):
+        super().__init__(server, **kwargs)
+        self.pull()
+
+    @property
+    def data_node(self):
+        """The data node owning ``source_port``."""
+        return None if self.source_port is None else self.source_port.node
+
+    def pull(self):
+        if self.representation is None:
+            return
+
+        self.Visibility = bool(self.representation.actor.visibility)
+
+    def push(self):
+        """Write the synced fields back to the VTK representation."""
+
+    def set_source_port(self, port: OutputPortModel):
+        """Display another port. Only the model side: the manager re-links
+        the graph. Sinks with a color map rebind it to the new port."""
+        self.source_port = port
+        rebind = getattr(self, "_on_custom_color_opacity_change", None)
+        if rebind is not None:
+            rebind(self.use_internal_color_opacity)
+
     @watch("Visibility")
     def _on_visibility_change(self, visibility):
         if self.representation is None:
@@ -38,8 +75,14 @@ class ViewMixin:
 # -----------------------------------------------------------------------------
 class ColorOpacityMixin:
     """
-    color_opacity = Sync(ColorOpacity, has_dataclass=True)
+    color_opacity = Sync(ColorOpacityModel, has_dataclass=True)
     use_internal_color_opacity
+
+    Switches between the port's shared color map and an internal one owned
+    by this sink. The sink acquires the map it colors through and releases
+    the other, so a map without users (the internal one while switched off,
+    or a port's shared map once its sinks moved on) never asks the port for
+    statistics.
     """
 
     def pre_init_color_opacity(self):
@@ -47,9 +90,14 @@ class ColorOpacityMixin:
         self._color_opacity_unwatch_1: Callable | None = None
 
     def post_init_color_opacity(self):
-        self._internal_color_opacity: ColorOpacity = create_default_color_opacity(
-            self.input
+        self._internal_color_opacity: ColorOpacityModel = create_color_opacity(
+            self.source_port
         )
+
+    def release_color_opacity(self):
+        """Stop using any color map; called when the sink is removed."""
+        if self.color_opacity is not None:
+            self.color_opacity.release(self._id)
 
     @property
     def active_color_opacity_id(self):
@@ -71,14 +119,24 @@ class ColorOpacityMixin:
             self._color_opacity_unwatch_1()
             self._color_opacity_unwatch_1 = None
 
-        active = (
-            self._internal_color_opacity if use_internal else self.input.color_opacity
-        )
+        # The eager first call happens inside __init__, before
+        # post_init_color_opacity built the internal map.
+        internal = getattr(self, "_internal_color_opacity", None)
+        if use_internal:
+            if internal is None:
+                return
+            active = internal
+            if internal.port is not self.source_port:
+                internal.bind(self.source_port)
+        else:
+            active = self.source_port.color_opacity
 
-        if (
-            self.color_opacity
-            and self.active_color_opacity_id == self.color_opacity._id
-        ):
+        previous = self.color_opacity
+        if previous is not None and previous is not active:
+            previous.release(self._id)
+        active.acquire(self._id)
+
+        if previous and self.active_color_opacity_id == previous._id:
             self.active_color_opacity_id = active._id
 
         self.color_opacity = active
@@ -118,46 +176,17 @@ class ColorOpacityMixin:
 
 
 # -----------------------------------------------------------------------------
-class OutlineProperties(ViewMixin, StateDataModel):
-    # Core representation properties
-    representation = ServerOnly(outline.OutlineRepresentation | None)
-    input = Sync(SourceProxy, has_dataclass=True)
-    view = Sync(WindowInternalState, has_dataclass=True)
-    label = Sync(str)
-    name = Sync(str)
-    icon = Sync(str)
-
-    # Outline specific
-    Visibility = Sync(bool, False)
-
-    def __init__(self, server, **kwargs):
-        super().__init__(server, **kwargs)
-        self.pull()
-        self.reset_camera()
-
-    def pull(self):
-        if self.representation is None:
-            return
-
-        self.Visibility = bool(self.representation.actor.visibility)
+class OutlineSinkNodeModel(SinkNodeModel):
+    """Bounding box of the input; visibility is its only property."""
 
 
 # -----------------------------------------------------------------------------
-class VolumeProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
-    # Core representation properties
-    representation = ServerOnly(volume.VolumeRepresentation | None)
-    input = Sync(SourceProxy, has_dataclass=True)
-    view = Sync(WindowInternalState, has_dataclass=True)
-    label = Sync(str)
-    name = Sync(str)
-    icon = Sync(str)
-
+class VolumeSinkNodeModel(ColorOpacityMixin, SinkNodeModel):
     # Color/Opacity properties
-    color_opacity = Sync(ColorOpacity, has_dataclass=True)
+    color_opacity = Sync(ColorOpacityModel, has_dataclass=True)
     use_internal_color_opacity = Sync(bool, False)
 
     # Volume specific
-    Visibility = Sync(bool, False)
     InterpolationType = Sync(str, "Nearest")  # Nearest, Linear, Cubic
     Shade = Sync(bool, False)
     GlobalIlluminationReach = Sync(float, 0)  # [0-1]
@@ -168,15 +197,12 @@ class VolumeProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
         self.pre_init_color_opacity()
         super().__init__(server, **kwargs)
         self.post_init_color_opacity()
-        self.pull()
-        self.reset_camera()
 
     def pull(self):
+        super().pull()
         if self.representation is None:
             return
 
-        # Update representation info
-        self.Visibility = bool(self.representation.Visibility)
         self.InterpolationType = str(self.representation.InterpolationType)
         self.Shade = bool(self.representation.Shade)
         self.GlobalIlluminationReach = float(
@@ -212,21 +238,12 @@ class VolumeProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
 
 
 # -----------------------------------------------------------------------------
-class SliceProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
-    # Core representation properties
-    input = Sync(SourceProxy, has_dataclass=True)
-    view = Sync(WindowInternalState, has_dataclass=True)
-    representation = ServerOnly(slice.SliceRepresentation | None)
-    label = Sync(str)
-    name = Sync(str)
-    icon = Sync(str)
-
+class SliceSinkNodeModel(ColorOpacityMixin, SinkNodeModel):
     # Color/Opacity properties
-    color_opacity = Sync(ColorOpacity, has_dataclass=True)
+    color_opacity = Sync(ColorOpacityModel, has_dataclass=True)
     use_internal_color_opacity = Sync(bool, False)
 
     # Slice specific
-    Visibility = Sync(bool, False)
     Dimensions = Sync(tuple[int, int, int], (0, 0, 0))
     Slice = Sync(int, 0)
     SliceMax = Sync(int, 0)
@@ -237,25 +254,24 @@ class SliceProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
         self.pre_init_color_opacity()
         super().__init__(server, **kwargs)
         self.post_init_color_opacity()
-        self.pull()
-        self.reset_camera()
 
     def pull(self):
+        super().pull()
         if self.representation is None:
             return
 
-        extent = self.representation.input_extent
-
+        # The port describes the data before the sink gets it (the manager
+        # posts the description first), so read the extent there.
+        image = self.source_port.image if self.source_port else None
+        extent = image.extent if image is not None else (0,) * 6
         self.Dimensions = (
-            extent[1] - extent[0],
-            extent[3] - extent[2],
-            extent[5] - extent[4],
+            max(extent[1] - extent[0], 0),
+            max(extent[3] - extent[2], 0),
+            max(extent[5] - extent[4], 0),
         )
         logger.debug("extent {}", extent)
         logger.debug("Dimensions {}", self.Dimensions)
 
-        # Update representation info
-        self.Visibility = bool(self.representation.actor.visibility)
         self.Slice = self.representation.Slice
         self.SliceDirection = self.representation.SliceDirection
 
@@ -286,11 +302,3 @@ class SliceProperties(ViewMixin, ColorOpacityMixin, StateDataModel):
         logger.debug("Slice {}", self.Slice)
         self.push()
         self.render()
-
-
-# -----------------------------------------------------------------------------
-REPRESENTATIONS = (
-    OutlineProperties,
-    SliceProperties,
-    VolumeProperties,
-)

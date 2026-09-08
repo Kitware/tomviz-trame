@@ -1,8 +1,12 @@
+"""Parameter models and panels generated from a catalog entry's JSON
+``parameters`` list: one ``StateDataModel`` subclass per entry name (one
+synced field per parameter) and the Vuetify HTML that edits it."""
+
 from loguru import logger
 from trame.app import dataclass
 from trame.widgets import vuetify3 as v3
 
-OPERATOR_DATA_CLASSES = {}
+PARAMETERS_MODEL_CLASSES = {}
 
 
 def gui_bool(parameter):
@@ -257,7 +261,7 @@ def to_param(name, param):
         add_on_fields["dataset_items"] = dataclass.Sync(list, list)
 
     if core_py_type is None:
-        msg = f"Invalid parameter type::{param_type} for Operator({name}::{param.get('name')})"
+        msg = f"Invalid parameter type::{param_type} for {name}::{param.get('name')}"
         raise ValueError(msg)
 
     py_type = core_py_type
@@ -271,10 +275,10 @@ def to_param(name, param):
     return {name: dataclass.Sync(py_type, py_default, **add_on), **add_on_fields}
 
 
-def get_operator_dataclass(meta):
+def parameters_model_class(meta):
     name = meta.get("name")
     parameters = meta.get("parameters", [])
-    klass = OPERATOR_DATA_CLASSES.get(name)
+    klass = PARAMETERS_MODEL_CLASSES.get(name)
 
     if klass:
         return klass
@@ -304,10 +308,10 @@ def get_operator_dataclass(meta):
 
     # Create class
     klass = type(name, (dataclass.StateDataModel,), namespace)
-    OPERATOR_DATA_CLASSES[name] = klass
+    PARAMETERS_MODEL_CLASSES[name] = klass
     return klass
 
 
-def to_operator_data(server, meta):
-    klass = get_operator_dataclass(meta)
+def to_parameters_model(server, meta):
+    klass = parameters_model_class(meta)
     return klass(server)
