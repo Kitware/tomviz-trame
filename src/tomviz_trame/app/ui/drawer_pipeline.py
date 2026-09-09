@@ -87,7 +87,6 @@ class PipelineSection(html.Div):
                                                 v_if="item.expand_pipeline",
                                                 classes="",
                                             ):
-                                                v3.VLabel("{{ pipeline.active_node }}")
                                                 with v3.VTreeview(
                                                     v_model_activated=(
                                                         "pipeline.active_node",
@@ -122,11 +121,11 @@ class PipelineSection(html.Div):
                                                             v_on_click_prevent_stop="select_transform = true; active_data_id = item._id;",
                                                         )
                                                 # Sinks of every node in the chain
-                                                # are listed under the root, like
-                                                # the desktop app's modules.
+                                                # (any depth) are listed under the
+                                                # root, like the desktop app's modules.
                                                 with (
                                                     v3.Template(
-                                                        v_for="node_id in [item._id, ...item.downstream.map((n) => n._id)]",
+                                                        v_for="node_id in utils.tomviz.chainIds(item)",
                                                         key="node_id",
                                                     ),
                                                     dataclass.Provider(

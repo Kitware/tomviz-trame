@@ -21,7 +21,7 @@ uv pip install .
 Run the application
 
 ```sh
-python -m tomviz --server
+python -m tomviz_trame --server
 ```
 
 ## Development setup

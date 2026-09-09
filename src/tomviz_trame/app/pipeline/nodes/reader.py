@@ -44,9 +44,15 @@ class ReaderSourceNode(_ReaderSourceNode):
 
     @property
     def file_path(self) -> Path | None:
+        """The first file, relative paths resolved against the state file's
+        directory (stamped on the node by the library's loader)."""
         if not self.file_names:
             return None
-        return Path(self.file_names[0])
+        path = Path(self.file_names[0])
+        state_dir = getattr(self, "_state_dir", None)
+        if not path.is_absolute() and state_dir is not None:
+            path = (Path(state_dir) / path).resolve()
+        return path
 
     def execute(self) -> bool:
         file_path = self.file_path

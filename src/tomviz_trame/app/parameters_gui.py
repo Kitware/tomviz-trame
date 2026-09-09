@@ -308,8 +308,27 @@ def parameters_model_class(meta):
 
     # Create class
     klass = type(name, (dataclass.StateDataModel,), namespace)
+    _ensure_field_registries(klass)
     PARAMETERS_MODEL_CLASSES[name] = klass
     return klass
+
+
+def _ensure_field_registries(klass):
+    """trame-dataclass creates a model class's field registries when its
+    first ``Sync`` field registers itself; a parameter-less transform has no
+    field, so create the (empty) registries here."""
+    for key in (
+        "FIELD_NAMES",
+        "DATACLASS_NAMES",
+        "CLIENT_NAMES",
+        "CLIENT_ONLY_NAMES",
+        "CLIENT_DEEP_REACTIVE",
+    ):
+        if key not in klass.__dict__:
+            setattr(klass, key, set(getattr(klass, key, set())))
+    for key in ("ENCODERS", "TYPE_CHECKING"):
+        if key not in klass.__dict__:
+            setattr(klass, key, dict(getattr(klass, key, {})))
 
 
 def to_parameters_model(server, meta):

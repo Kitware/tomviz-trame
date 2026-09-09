@@ -2146,7 +2146,7 @@ wheels = [
 
 [[package]]
 name = "tomviz-pipeline"
-version = "3.1.4"
+version = "3.1.5"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -2155,9 +2155,9 @@ dependencies = [
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/da/c8/a19fa93b64918390b0668db886635dfc6d0d866661d1fbf02c7be37bf4f1/tomviz_pipeline-3.1.4.tar.gz", hash = "sha256:2947f620ca3ea5dcced3722efac3140dd9c8ade266ab1143679dd0ae87db3f95", size = 155987 }
+sdist = { url = "https://files.pythonhosted.org/packages/33/9a/f34be4f509f7e24202b42377002e29d7a6ea9f7935863e046c24b0c46edc/tomviz_pipeline-3.1.5.tar.gz", hash = "sha256:19a30a07810d86eee79f586fb45b0bf9bd00024448395d64b3f805cbf48464ee", size = 157492 }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1b/08/129ec6629504a93950cafcd1eca623f8f8b8f72b2af5ff4bb5c809d91f36/tomviz_pipeline-3.1.4-py3-none-any.whl", hash = "sha256:16685dd67baed7671bbeec712b31219cf776bede8c6d94eaf7c7db3d8eb59842", size = 133177 },
+    { url = "https://files.pythonhosted.org/packages/93/dd/573d671b4a85a18b39fc68929cc3d643ffceac69249c0042ea78c0224333/tomviz_pipeline-3.1.5-py3-none-any.whl", hash = "sha256:6338dd5ba7ca6f8b6389e150a3749bcd7d60ebb24d787998deb45c15fd12d0c3", size = 133757 },
 ]
 
 [[package]]
@@ -2201,7 +2201,7 @@ requires-dist = [
     { name = "pywebview", marker = "extra == 'app'" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "scipy", specifier = ">=1.17.1" },
-    { name = "tomviz-pipeline", specifier = ">=3.1.4" },
+    { name = "tomviz-pipeline", specifier = ">=3.1.5" },
     { name = "trame", specifier = ">=3.12" },
     { name = "trame-color-opacity-editor" },
     { name = "trame-colormaps", specifier = ">=1.5" },

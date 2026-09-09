@@ -4,6 +4,7 @@ from trame.widgets import html
 from trame.widgets import vuetify3 as v3
 
 from tomviz_trame.app.pipeline.nodes import SUPPORTED_EXTENSIONS
+from tomviz_trame.app.pipeline.state import STATE_EXTENSIONS
 
 # -----------------------------------------------------------------------------
 # Utils
@@ -101,8 +102,8 @@ class FileLoader(v3.VDialog):
     ):
         super().__init__(v_model=("tomviz_file_loader", False))
 
-        # What the reader node can open
-        self._file_ext = SUPPORTED_EXTENSIONS
+        # What the reader node can open, plus state files
+        self._file_ext = (*SUPPORTED_EXTENSIONS, *STATE_EXTENSIONS)
 
         # Initialize file browser
         self._file_browser = FileBrowser(current=Path.cwd())
@@ -251,4 +252,7 @@ class FileLoader(v3.VDialog):
     def open_dataset(self, entry):
         self.state.tomviz_file_loader = False
         file_to_load = self._file_browser.to_file(entry)
-        self.ctx.pipeline.load_file(file_to_load)
+        if self.ctx.pipeline.is_state_file(file_to_load):
+            self.ctx.pipeline.load_state_file_later(file_to_load)
+        else:
+            self.ctx.pipeline.load_file(file_to_load)

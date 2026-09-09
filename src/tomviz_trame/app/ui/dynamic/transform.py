@@ -1,5 +1,5 @@
 from trame.ui.html import DivLayout
-from trame.widgets import dataclass, html
+from trame.widgets import dataclass
 from trame.widgets import vuetify3 as v3
 
 NAME = "transform"
@@ -19,15 +19,6 @@ class TransformUI(DivLayout):
             dataclass.Provider(name="transform", instance=("active_data_id",)),
         ):
             dataclass.Gui(instance=("transform.parameters._id",))
-            with html.Div(classes="d-flex"):
-                v3.VSpacer()
-                v3.VBtn(
-                    "Apply",
-                    classes="text-none",
-                    density="compact",
-                    variant="tonal",
-                    color="primary",
-                )
 
 
 UI = TransformUI

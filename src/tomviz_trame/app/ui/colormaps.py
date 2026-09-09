@@ -20,32 +20,11 @@ def color_to_float_rgb(color: str) -> Color:
     return (red / 255, green / 255, blue / 255)
 
 
-# Colors sampled per preset. The color-opacity editor paints its background
-# (and the histogram silhouette) as a gradient through these nodes, evenly
-# spaced over the color range, so they must follow the preset's interpolation
-# (its color space) rather than its raw control points.
-PRESET_COLOR_SAMPLES = 32
-
-
-def sample_preset_colors(name: str, count: int = PRESET_COLOR_SAMPLES) -> list[Color]:
-    ctf = presets.get_preset_ctf(name)
-    if ctf is None:
-        return []
-    low, high = ctf.GetRange()
-    rgb = [0.0, 0.0, 0.0]
-    colors = []
-    for i in range(count):
-        ctf.GetColor(low + (high - low) * i / max(count - 1, 1), rgb)
-        colors.append((round(rgb[0], 4), round(rgb[1], 4), round(rgb[2], 4)))
-    return colors
-
-
 def generate_colormaps(server):
     color_maps = {}
     for name, imgs in presets.COLORBAR_CACHE.items():
         color_maps[name] = {
             "name": name,
-            "colors": sample_preset_colors(name),
             "imgs": tuple(imgs.values()),
         }
 

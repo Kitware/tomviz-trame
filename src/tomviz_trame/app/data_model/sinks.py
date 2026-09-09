@@ -29,7 +29,9 @@ class SinkNodeModel(NodeModel):
     source_port = Sync(OutputPortModel, has_dataclass=True)
     view = Sync(ViewModel, has_dataclass=True)
 
-    Visibility = Sync(bool, False)
+    # Whether the user wants the sink shown. The actor is only shown once
+    # data has arrived, see ``apply_visibility``.
+    Visibility = Sync(bool, True)
 
     def __init__(self, server, **kwargs):
         super().__init__(server, **kwargs)
@@ -41,13 +43,19 @@ class SinkNodeModel(NodeModel):
         return None if self.source_port is None else self.source_port.node
 
     def pull(self):
-        if self.representation is None:
-            return
-
-        self.Visibility = bool(self.representation.actor.visibility)
+        """Copy the VTK side into the synced fields (subclasses extend)."""
 
     def push(self):
         """Write the synced fields back to the VTK representation."""
+
+    def apply_visibility(self):
+        """Show the actor when wanted and data is there."""
+        representation = self.representation
+        if representation is None:
+            return
+        representation.actor.visibility = bool(
+            self.Visibility and representation.image is not None
+        )
 
     def set_source_port(self, port: OutputPortModel):
         """Display another port. Only the model side: the manager re-links
@@ -58,11 +66,8 @@ class SinkNodeModel(NodeModel):
             rebind(self.use_internal_color_opacity)
 
     @watch("Visibility")
-    def _on_visibility_change(self, visibility):
-        if self.representation is None:
-            return
-
-        self.representation.actor.visibility = bool(visibility)
+    def _on_visibility_change(self, _visibility):
+        self.apply_visibility()
         self.render()
 
     def render(self, *_):
@@ -148,7 +153,7 @@ class ColorOpacityMixin:
 
         # can this rerender happen automatically when the lut/pwf is modified?
         self._color_opacity_unwatch_1 = active.watch(
-            ["color_range", "opacities", "active_color_preset", "invert_color_preset"],
+            ["color_points", "opacity_points", "color_space"],
             self.render,
         )
 
@@ -291,7 +296,9 @@ class SliceSinkNodeModel(ColorOpacityMixin, SinkNodeModel):
             return
         self.SliceMax = self.Dimensions[self.SliceDirections.index(direction)]
         logger.debug("SliceMax {}", self.SliceMax)
-        if self.Slice >= self.SliceMax:
+        # No data yet means no known bounds: keep a slice set ahead of the
+        # data (a loaded state) instead of clamping it to 0.
+        if self.SliceMax > 0 and self.Slice > self.SliceMax:
             self.Slice = 0
 
         self.push()

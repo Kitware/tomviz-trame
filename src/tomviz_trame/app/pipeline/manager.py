@@ -26,12 +26,7 @@ from tomviz_trame.app.pipeline.nodes import (
     register_nodes,
 )
 from tomviz_trame.app.pipeline.representations import RepresentationType
-
-# TEMPORARY: every loaded file gets this transform inserted between the
-# reader and its sinks (its sigma is live in the transform panel). Remove
-# once transforms are added through the UI.
-TEMP_TRANSFORM = "GaussianFilter"
-TEMP_TRANSFORM_PARAMETERS = {"sigma": 0.0}
+from tomviz_trame.app.pipeline.state import STATE_EXTENSIONS, load_state_file
 
 
 class PipelineManager(TrameComponent):
@@ -60,19 +55,21 @@ class PipelineManager(TrameComponent):
         super().__init__(server=server)
         register_nodes()
 
-        self.pipeline = Pipeline()
-        self.pipeline.auto_execute = True
+        # No executor progress reporter: kernel progress then reaches each
+        # node's own progress signals (progress_step_changed, ...), the
+        # per-node source a UI can connect through the dispatcher.
         self.executor = ThreadedExecutor()
-        self.pipeline.set_executor(self.executor)
-
         self._loop: asyncio.AbstractEventLoop | None = None
         self._dispatcher: AsyncioDispatcher | None = None
+        self._pipeline_connections = []
+        self.pipeline: Pipeline | None = None
 
         self.node_models: dict[int, data_model.NodeModel] = {}  # node.id -> model
         self.views = {}  # view_id -> ui.RenderWindow
         self.pending_tasks = set()
 
-        self.model = data_model.PipelineModel(self.server, pipeline=self.pipeline)
+        self.model = data_model.PipelineModel(self.server)
+        self.attach_pipeline(Pipeline())
         self.state.property_templates = []
         self.state.active_view_id = None
         self.state.active_data_id = None
@@ -118,13 +115,57 @@ class PipelineManager(TrameComponent):
         self.executor.node_execution_finished.connect(
             self._on_node_finished, self._dispatcher
         )
-        self.pipeline.execution_started.connect(
-            lambda _future: logger.debug("Pipeline execution started"),
-            self._dispatcher,
-        )
-        self.pipeline.execution_finished.connect(
-            self._on_execution_finished, self._dispatcher
-        )
+        self._connect_pipeline_signals()
+
+    def _connect_pipeline_signals(self):
+        """Bind the current pipeline's signals through the dispatcher (the
+        executor's are bound once; pipelines come and go)."""
+        for connection in self._pipeline_connections:
+            connection.disconnect()
+        self._pipeline_connections = []
+        if self._dispatcher is None or self.pipeline is None:
+            return
+        self._pipeline_connections = [
+            self.pipeline.execution_started.connect(
+                lambda _future: logger.debug("Pipeline execution started"),
+                self._dispatcher,
+            ),
+            self.pipeline.execution_finished.connect(
+                self._on_execution_finished, self._dispatcher
+            ),
+        ]
+
+    def attach_pipeline(self, pipeline: Pipeline):
+        """Adopt ``pipeline`` as the graph, replacing the current one. The
+        models are the caller's business: ``reset()`` first to drop the old
+        ones, then mirror the new graph."""
+        if self.pipeline is not None:
+            self.pipeline.set_executor(None)
+        self.pipeline = pipeline
+        pipeline.auto_execute = True
+        pipeline.set_executor(self.executor)
+        self.model.pipeline = pipeline
+        self._connect_pipeline_signals()
+
+    def reset(self):
+        """Back to an empty session: stop executing, drop every sink (and
+        its actors), every view and every model, and empty the graph."""
+        self.executor.cancel_and_wait(timeout=5)
+        for sink_model in [
+            m
+            for m in self.node_models.values()
+            if isinstance(m, data_model.SinkNodeModel)
+        ]:
+            self.remove_sink(sink_model.node.id)
+        for view_id in list(self.views):
+            self.remove_view(view_id)
+        for model in list(self.node_models.values()):
+            unbind = getattr(model, "unbind_parameters", None)
+            if unbind is not None:
+                unbind()
+            self._untrack(model)
+        self.model.active_node = []
+        self.pipeline.clear()
 
     def run_on_loop(self, callback: Callable[[], None]):
         """Run ``callback`` on the application's event loop from any thread.
@@ -166,6 +207,15 @@ class PipelineManager(TrameComponent):
             self.run_on_loop(
                 functools.partial(port_model.apply_description, description)
             )
+
+    def describe_ports(self, model: data_model.DataNodeModel):
+        """Install the geometry of every output port that already carries
+        data (a node loaded from a ``.tvh5``): nothing ran, so no
+        ``_describe_outputs`` will. Statistics stay lazy."""
+        for port_model in list(model.outputs):
+            description = port_model.describe(requested=set())
+            if description is not None:
+                port_model.apply_description(description)
 
     def _on_node_finished(self, node: Node, success: bool):
         # Event loop, queued behind whatever the loop is doing: the node
@@ -251,14 +301,6 @@ class PipelineManager(TrameComponent):
         )
         self._track(source)
 
-        # TEMPORARY: exercise re-execution with a real transform in the chain.
-        self.add_transform(
-            source._id,
-            TEMP_TRANSFORM,
-            parameters=TEMP_TRANSFORM_PARAMETERS,
-            execute=False,
-        )
-
         if self.state.active_view_id:
             self.add_default_sinks(source._id, self.state.active_view_id)
 
@@ -268,6 +310,26 @@ class PipelineManager(TrameComponent):
         self.execute()
 
         return source._id
+
+    # -------------------------------------------------------------------------
+    # State files
+    # -------------------------------------------------------------------------
+
+    def is_state_file(self, file_path: str | Path) -> bool:
+        return Path(file_path).suffix.lower() in STATE_EXTENSIONS
+
+    async def load_state_file(self, file_path: str | Path):
+        """Replace the session with a ``.tvsm`` / ``.tvh5`` state file."""
+        try:
+            await load_state_file(self, file_path)
+        except Exception:
+            logger.exception("Cannot load state file {}", file_path)
+
+    def load_state_file_later(self, file_path: str | Path):
+        """Schedule ``load_state_file`` from synchronous code (UI callbacks)."""
+        task = asyncio.create_task(self.load_state_file(file_path))
+        self.pending_tasks.add(task)
+        task.add_done_callback(self.pending_tasks.discard)
 
     # -------------------------------------------------------------------------
     # Views
@@ -306,7 +368,7 @@ class PipelineManager(TrameComponent):
         ]:
             self.remove_sink(sink_model.node.id)
 
-        view.vtk_view.clear()
+        view.vtk_view.finalize()
         self.ctx.dock_view.remove_panel(view.vtk_id)
         self.state.active_view_id = None
         del self.views[view_id]
@@ -458,6 +520,21 @@ class PipelineManager(TrameComponent):
         )
         self.pipeline.add_node(sink)
         self.pipeline.create_link(output, sink.input_port(INPUT_PORT))
+        self._register_sink(sink, data_node, view_id)
+
+        if execute:
+            self.execute_when_idle()
+
+        return sink.model._id
+
+    def _register_sink(
+        self,
+        sink: RepresentationSinkNode,
+        data_node: data_model.DataNodeModel,
+        view_id: str,
+    ):
+        """Mirror a sink that is already in the graph and linked: track its
+        model and list it under ``data_node`` for its view."""
         self._track(sink.model)
 
         if view_id not in data_node.expand_sinks:
@@ -466,11 +543,6 @@ class PipelineManager(TrameComponent):
         sinks = {**(data_node.sinks or {})}
         sinks[view_id] = [*sinks.get(view_id, []), sink.model._id]
         data_node.sinks = sinks
-
-        if execute:
-            self.execute_when_idle()
-
-        return sink.model._id
 
     def remove_sink(self, node_id: int):
         sink_model = self.node_models.get(node_id)

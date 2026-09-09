@@ -1,0 +1,234 @@
+"""Load synthetic state files into a headless app session.
+
+One session for both formats: the second load also exercises
+``PipelineManager.reset``.
+"""
+
+import asyncio
+import json
+import sys
+
+import numpy as np
+import pytest
+from tomviz_pipeline import DefaultExecutor
+from tomviz_pipeline.core.state import pipeline_from_state_dict
+from tomviz_pipeline.dataset import Dataset
+from tomviz_pipeline.state import write_state_tvh5
+from vtkmodules.vtkIOImage import vtkTIFFWriter
+
+from tomviz_trame.app import data_model
+from tomviz_trame.app.pipeline.nodes import RepresentationSinkNode, register_nodes
+from tomviz_trame.app.pipeline.vtk import convert
+
+SHAPE = (3, 4, 5)
+VIEW_ID = 42
+CAMERA = {
+    "position": [1.0, 2.0, 30.0],
+    "focalPoint": [1.0, 2.0, 2.0],
+    "viewUp": [0.0, 1.0, 0.0],
+    "viewAngle": 30.0,
+    "parallelScale": 5.0,
+}
+COLOR_MAP = {
+    "colorSpace": "CIELAB",
+    "colors": [10.0, 0.0, 0.0, 1.0, 20.0, 1.0, 0.0, 0.0],
+    "points": [10.0, 0.0, 0.5, 0.0, 20.0, 1.0, 0.5, 0.0],
+}
+
+
+def state_dict(tiff_path):
+    return {
+        "schemaVersion": 2,
+        "paletteColor": [0.9, 0.9, 0.9],
+        "pipeline": {
+            "nextNodeId": 5,
+            "nodes": [
+                {
+                    "id": 1,
+                    "type": "source.reader",
+                    "label": "volume",
+                    "fileNames": [str(tiff_path)],
+                    "outputPorts": {
+                        "volume": {
+                            "type": "ImageData",
+                            "persistent": True,
+                            "metadata": {"colorOpacityMap": COLOR_MAP},
+                        }
+                    },
+                },
+                {
+                    "id": 2,
+                    "type": "sinkGroup",
+                    "label": "Visualizations",
+                    "inputPorts": {"volume": {"type": ["ImageData"]}},
+                    "outputPorts": {
+                        "volume": {"persistent": False, "type": "ImageData"}
+                    },
+                    "typeInferenceSources": {"volume": "volume"},
+                },
+                {
+                    "id": 3,
+                    "type": "sink.slice",
+                    "label": "Slice",
+                    "inputPorts": {"volume": {"type": ["ImageData"]}},
+                    "direction": 1,
+                    "slice": 2,
+                    "viewId": VIEW_ID,
+                },
+                {
+                    "id": 4,
+                    "type": "sink.outline",
+                    "label": "Outline",
+                    "inputPorts": {"volume": {"type": ["ImageData"]}},
+                    "visible": False,
+                    "viewId": VIEW_ID,
+                },
+            ],
+            "links": [
+                {
+                    "from": {"node": 1, "port": "volume"},
+                    "to": {"node": 2, "port": "volume"},
+                },
+                {
+                    "from": {"node": 2, "port": "volume"},
+                    "to": {"node": 3, "port": "volume"},
+                },
+                {
+                    "from": {"node": 2, "port": "volume"},
+                    "to": {"node": 4, "port": "volume"},
+                },
+            ],
+        },
+        "views": [
+            {
+                "id": VIEW_ID,
+                "active": True,
+                "interactionMode": "3D",
+                "backgroundColor": [[0.1, 0.2, 0.3]],
+                "camera": CAMERA,
+                "isOrthographic": False,
+            }
+        ],
+    }
+
+
+@pytest.fixture
+def state_files(tmp_path):
+    values = np.arange(np.prod(SHAPE), dtype=np.uint16).reshape(SHAPE, order="F")
+    tiff_path = tmp_path / "volume.tif"
+    writer = vtkTIFFWriter()
+    writer.SetFileName(str(tiff_path))
+    writer.SetInputData(convert.to_vtk_image(Dataset({"scalars": values})))
+    writer.Write()
+
+    raw = state_dict(tiff_path)
+    tvsm = tmp_path / "session.tvsm"
+    tvsm.write_text(json.dumps(raw))
+
+    # A .tvh5 bundles the executed reader's payload.
+    register_nodes()
+    pipeline = pipeline_from_state_dict(raw)
+    assert DefaultExecutor(pipeline).execute()
+    tvh5 = tmp_path / "session.tvh5"
+    write_state_tvh5(tvh5, raw, pipeline)
+    return tvsm, tvh5
+
+
+async def wait_idle(manager):
+    for _ in range(200):
+        if not manager.pipeline.is_executing():
+            break
+        await asyncio.sleep(0.05)
+    await asyncio.sleep(0.3)  # loop callbacks and background statistics
+
+
+def sinks_of(manager):
+    return {
+        m.node.id: m
+        for m in manager.model.nodes
+        if isinstance(m, data_model.SinkNodeModel)
+    }
+
+
+async def run_session(tvsm, tvh5):
+    from tomviz_trame.app.core import Tomviz
+
+    app = Tomviz()
+    server = app.server
+    serve = asyncio.create_task(
+        server.start(exec_mode="coroutine", port=0, open_browser=False, timeout=0)
+    )
+    await server.ready
+    manager = app.ctx.pipeline
+    executed = []
+    manager.executor.node_execution_started.connect(lambda n: executed.append(n.id))
+
+    try:
+        # ---- .tvsm: everything re-executes
+        await manager.load_state_file(tvsm)
+        await wait_idle(manager)
+        check_session(manager, server)
+        assert executed[0] == 1  # the reader ran first
+        assert set(executed) == {1, 3, 4}
+
+        # ---- .tvh5 in the same session: reset, then only the sinks run
+        executed.clear()
+        await manager.load_state_file(tvh5)
+        await wait_idle(manager)
+        check_session(manager, server)
+        assert set(executed) == {3, 4}
+        assert len(manager.views) == 1
+        assert len(manager.model.nodes) == 3
+    finally:
+        manager.shutdown()
+        await server.stop()
+        serve.cancel()
+
+
+def check_session(manager, server):
+    pipeline = manager.pipeline
+    assert pipeline.node_by_id(2) is None  # the sink group is gone
+    sinks = sinks_of(manager)
+    assert set(sinks) == {3, 4}
+    assert all(
+        isinstance(pipeline.node_by_id(i), RepresentationSinkNode) for i in sinks
+    )
+
+    source = manager.model.roots[0]
+    assert source.label == "volume"
+    assert manager.model.active_node == [source._id]
+    port = source.primary_output_model
+    assert port.has_data
+    assert port.image.dimensions == SHAPE
+    assert source.sinks == {sinks[3].view._id: [sinks[3]._id, sinks[4]._id]}
+
+    slice_model, outline = sinks[3], sinks[4]
+    assert (slice_model.SliceDirection, slice_model.Slice) == ("YZ Plane", 2)
+    assert slice_model.SliceMax == SHAPE[0] - 1
+    assert slice_model.representation.actor.visibility
+    assert outline.Visibility is False
+    assert not outline.representation.actor.visibility
+
+    color_map = port.color_opacity
+    assert color_map.color_space == "Lab"
+    assert color_map.color_range == [10.0, 20.0]  # kept from the file
+    assert color_map.data_range[:2] == (0.0, float(np.prod(SHAPE) - 1))
+
+    view = slice_model.view
+    assert server.state.active_view_id == view._id
+    assert view.background == (0.1, 0.2, 0.3)
+    assert view.camera_initialized
+    camera = view.vtk_view.camera
+    assert camera["position"] == CAMERA["position"]  # not refit by the data
+    assert camera["parallelProjection"] is False
+
+
+def test_state_files_load_into_a_session(state_files, tmp_path, monkeypatch):
+    # The app reads its catalog configuration from the command line (default:
+    # the user's home); keep the test off the developer's own files.
+    catalog = tmp_path / "catalog.json"
+    catalog.write_text(json.dumps({"directories": [], "modules": [], "favorites": []}))
+    monkeypatch.setattr(
+        sys, "argv", ["pytest", "--catalog", str(catalog), "--read-only"]
+    )
+    asyncio.run(run_session(*state_files))

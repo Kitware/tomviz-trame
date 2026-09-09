@@ -11,7 +11,7 @@ from tomviz_trame.app.pipeline.nodes import INPUT_PORT, build_transform_node
 
 pytest.importorskip("scipy")
 
-BUILTIN = Path(__file__).parent.parent / "src" / "tomviz" / "operators" / "builtin"
+BUILTIN = Path(__file__).parent.parent / "src" / "tomviz_trame" / "builtin_kernels"
 
 
 @pytest.fixture
@@ -86,3 +86,11 @@ def test_gaussian_chain_reexecutes_on_parameter_change(gaussian):
     assert blurred[4, 4, 4] < 1.0
     assert blurred[4, 4, 5] > 0.0
     assert np.isclose(blurred.sum(), 1.0, atol=1e-3)
+
+
+def test_parameterless_description_still_makes_a_model():
+    from tomviz_trame.app.parameters_gui import to_parameters_model
+
+    model = to_parameters_model(None, {"name": "NoParams", "parameters": []})
+    assert set() == model.FIELD_NAMES
+    assert "<v-" in model.generate_gui()  # an empty column, no controls

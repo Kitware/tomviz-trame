@@ -14,6 +14,18 @@ from tomviz_pipeline import Node, OutputPort
 from trame.app.dataclass import ServerOnly, StateDataModel, Sync
 
 
+def coerce_like(reference, value):
+    """``value`` as the numeric type of ``reference``: state files store
+    ``4`` for a double parameter whose field is a float."""
+    if (
+        isinstance(reference, float)
+        and isinstance(value, int)
+        and not isinstance(value, bool)
+    ):
+        return float(value)
+    return value
+
+
 class NodeModel(StateDataModel):
     """Mirror of ``tomviz_pipeline.Node``. ``node`` is the graph object; the
     synced fields copy what the UI displays about it."""
@@ -95,7 +107,10 @@ class TransformNodeModel(DataNodeModel):
 
         names = [n for n in self.node.parameters if hasattr(self.parameters, n)]
         for name in names:
-            setattr(self.parameters, name, self.node.parameters[name])
+            current = getattr(self.parameters, name)
+            setattr(
+                self.parameters, name, coerce_like(current, self.node.parameters[name])
+            )
 
         self._parameter_names = names
         if names:

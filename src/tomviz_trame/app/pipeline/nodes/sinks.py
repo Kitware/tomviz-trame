@@ -77,11 +77,18 @@ class RepresentationSinkNode(SinkNode):
         self._has_data = True
 
         self.representation.set_input(image)
-        if first_data:
-            self.representation.actor.visibility = True
+        # Settings made before any data (a loaded state) live only in the
+        # model: assert them on the representation, then read the derived
+        # values (extents, ranges) back.
+        self.model.push()
         self.model.pull()
-
         if first_data:
+            self.model.apply_visibility()
+
+        # The first data placed in a view fits the camera; a camera set from
+        # a state file (or an earlier dataset) is left alone.
+        if first_data and not self.view.camera_initialized:
+            self.view.camera_initialized = True
             self.model.reset_camera()
         self.model.render()
 

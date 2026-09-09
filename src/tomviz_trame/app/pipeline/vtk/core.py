@@ -1,8 +1,13 @@
-from trame_colormaps.core.presets import apply_preset as _apply_ctf_preset
-from trame_colormaps.core.presets import invert_ctf, rescale_ctf
 from vtkmodules.vtkCommonCore import vtkLookupTable
 from vtkmodules.vtkCommonDataModel import vtkPiecewiseFunction
 from vtkmodules.vtkRenderingCore import vtkColorTransferFunction
+
+COLOR_SPACES = {
+    "RGB": vtkColorTransferFunction.SetColorSpaceToRGB,
+    "HSV": vtkColorTransferFunction.SetColorSpaceToHSV,
+    "Lab": vtkColorTransferFunction.SetColorSpaceToLab,
+    "Diverging": vtkColorTransferFunction.SetColorSpaceToDiverging,
+}
 
 
 class PiecewiseFunction:
@@ -24,21 +29,22 @@ class PiecewiseFunction:
 
 
 class LookupTable:
+    """A ``vtkColorTransferFunction`` (volume rendering) and the
+    ``vtkLookupTable`` sampled from it (surface mappers), both rebuilt from
+    explicit control points."""
+
     def __init__(self, n_colors=255):
         self.n_colors = n_colors
         self.ctf = vtkColorTransferFunction()
         self.table = vtkLookupTable()
 
-    def apply_preset(self, preset_name):
-        _apply_ctf_preset(self.ctf, preset_name)
-        self._build_table()
-
-    def rescale(self, min_value, max_value):
-        rescale_ctf(self.ctf, min_value, max_value)
-        self._build_table()
-
-    def invert(self):
-        invert_ctf(self.ctf)
+    def set_points(self, points, color_space="RGB"):
+        """``points``: ``[x, r, g, b]`` rows in data units; ``color_space``
+        picks the interpolation (RGB, HSV, Lab, Diverging)."""
+        self.ctf.RemoveAllPoints()
+        COLOR_SPACES.get(color_space, COLOR_SPACES["RGB"])(self.ctf)
+        for x, r, g, b in points:
+            self.ctf.AddRGBPoint(x, r, g, b)
         self._build_table()
 
     def _build_table(self):

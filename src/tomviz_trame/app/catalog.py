@@ -8,8 +8,9 @@ kernels will land in the same catalog.
 
 Configuration lives in ``~/.tomviz/catalog.json`` (or ``--catalog``): the
 directories and Python modules to scan, and the user's favorites. The
-builtin module is always scanned. An older ``operators.json`` is read when
-no ``catalog.json`` exists yet."""
+builtin module is always scanned, and the defaults of earlier versions that a
+config file may still list are dropped. An older ``operators.json`` is read
+when no ``catalog.json`` exists yet."""
 
 import importlib
 import importlib.util
@@ -17,6 +18,7 @@ import json
 from pathlib import Path
 
 from loguru import logger
+from tomviz_pipeline._compat import install_script_module_aliases
 from trame.app import TrameComponent
 from trame.decorators import controller
 
@@ -31,11 +33,14 @@ DEFAULT_CONFIG = Path.home() / ".tomviz" / "catalog.json"
 LEGACY_CONFIG = Path.home() / ".tomviz" / "operators.json"
 
 DEFAULT_MODULES = [
-    "tomviz.operators.builtin",
+    "tomviz_trame.builtin_kernels",
 ]
 DEFAULT_DIRECTORIES = [
     (Path.home() / ".tomviz" / "catalog"),
 ]
+# Defaults of earlier versions, still listed by config files they wrote.
+RETIRED_MODULES = {"tomviz.operators.builtin", "tomviz_trame.builtin"}
+RETIRED_DIRECTORIES = {str(Path.home() / ".tomviz" / "operators")}
 
 
 def module_to_path(module_name):
@@ -47,6 +52,9 @@ def module_to_path(module_name):
 
 
 def extract_entry_from_py(module_path: Path):
+    # Scripts import `tomviz.operators` / `tomviz.utils`; the library maps
+    # those names onto itself (there is no real `tomviz` package here).
+    install_script_module_aliases()
     name = module_path.name
     spec = importlib.util.spec_from_file_location(name, module_path)
     module = importlib.util.module_from_spec(spec)
@@ -95,6 +103,43 @@ class CatalogEntry:
         )
 
 
+def _drop_retired(directories, modules):
+    """Drop the app's own former defaults; user entries are left alone."""
+    kept_directories = []
+    for directory in directories:
+        if str(Path(directory)) in RETIRED_DIRECTORIES:
+            logger.info("Dropping retired catalog directory {}", directory)
+        else:
+            kept_directories.append(directory)
+    kept_modules = []
+    for module_name in modules:
+        if module_name in RETIRED_MODULES:
+            logger.info("Dropping retired catalog module {}", module_name)
+        else:
+            kept_modules.append(module_name)
+    return kept_directories, kept_modules
+
+
+def _prune_stale(directories, modules):
+    """Keep the directories that exist and the modules that import; the
+    rest are logged once and dropped (an old config's defaults)."""
+    kept_directories = []
+    for directory in directories:
+        if Path(directory).exists():
+            kept_directories.append(directory)
+        else:
+            logger.info("Dropping missing catalog directory {}", directory)
+    kept_modules = []
+    for module_name in modules:
+        try:
+            module_to_path(module_name)
+        except ImportError:
+            logger.info("Dropping unimportable catalog module {}", module_name)
+        else:
+            kept_modules.append(module_name)
+    return kept_directories, kept_modules
+
+
 class Catalog(TrameComponent):
     def __init__(self, server=None, config_file=None, read_only=False):
         super().__init__(server)
@@ -118,8 +163,15 @@ class Catalog(TrameComponent):
 
         if source is not None:
             config = json.loads(source.read_text())
-            self.directories.update(config.get("directories", []))
-            self.modules.update(config.get("modules", []))
+            directories, modules = _drop_retired(
+                config.get("directories", []), config.get("modules", [])
+            )
+            if source == LEGACY_CONFIG:
+                # Written before the catalog rename: its defaults point at
+                # modules and directories that no longer exist.
+                directories, modules = _prune_stale(directories, modules)
+            self.directories.update(directories)
+            self.modules.update(modules)
             self.favorites.update(config.get("favorites", []))
         self.state.catalog_favorite_count = len(self.favorites)
         self.update()
@@ -201,9 +253,15 @@ class Catalog(TrameComponent):
             except ImportError:
                 logger.warning("Cannot import catalog module {}", module_name)
         all_directories = map(Path, [*self.directories, *module_paths])
+        default_directories = {d.resolve() for d in DEFAULT_DIRECTORIES}
         for directory in all_directories:
             if not directory.exists():
-                logger.warning("Catalog directory not found: {}", directory)
+                # The app's own default directory is optional; one the user
+                # listed is not.
+                if directory.resolve() in default_directories:
+                    logger.debug("Default catalog directory absent: {}", directory)
+                else:
+                    logger.warning("Catalog directory not found: {}", directory)
                 continue
 
             # search json first
