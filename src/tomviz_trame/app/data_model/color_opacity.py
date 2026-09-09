@@ -90,6 +90,7 @@ class ColorOpacityModel(StateDataModel):
         self._applied: tuple[int, str] | None = None  # (data_version, array)
         self._points_range = DEFAULT_RANGE  # what the points currently span
         self._preserve_range = False  # a loaded map keeps its range once
+        self._inherited = False  # copied from the upstream port's map
         super().__init__(server, **kwargs)
         if not self.color_points:
             self.apply_preset()
@@ -166,6 +167,24 @@ class ColorOpacityModel(StateDataModel):
             self.opacity_points = opacity_rows
         self._preserve_range = True
         self.color_range = list(self._points_range)
+        self._update_lut()
+        self._update_pwf()
+
+    def inherit_from(self, source: ColorOpacityModel):
+        """Copy ``source``'s transfer functions, what a new node's output
+        gets from the port feeding it (desktop parity). The points keep the
+        upstream range for now and are stretched onto this port's data
+        range when its statistics first arrive, unless the port carries a
+        label map, whose values are label ids and never rescale."""
+        self.active_color_preset = source.active_color_preset
+        self.invert_color_preset = source.invert_color_preset
+        self.color_space = source.color_space
+        self._points_range = tuple(source._points_range)
+        self.color_range = list(source.color_range)
+        self.color_points = [list(row) for row in source.color_points]
+        self.opacity_points = [list(row) for row in source.opacity_points]
+        self._preserve_range = False
+        self._inherited = True
         self._update_lut()
         self._update_pwf()
 
@@ -312,7 +331,8 @@ class ColorOpacityModel(StateDataModel):
         v_min, v_max = stats.range
         step = max((v_max - v_min) / 255, 1)
         self.data_range = (v_min, v_max, step)
-        if self._preserve_range:
+        keep_labels = self._inherited and port.port_type == "LabelMap"
+        if self._preserve_range or keep_labels:
             self._preserve_range = False
         else:
             self.color_range = [v_min, v_max]

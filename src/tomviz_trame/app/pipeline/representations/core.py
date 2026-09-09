@@ -96,6 +96,13 @@ class Representation:
         self._image = image
         self.producer.SetOutput(image)
 
+    def clear_input(self):
+        """Forget the image: the actor hides until data arrives again (the
+        producer keeps the last image so VTK never executes empty)."""
+        self._image = None
+        if self.actor is not None:
+            self.actor.visibility = False
+
     def attach(self, view):
         """Add the actor to a ``vtk.view.View``, hidden until data arrives."""
         self.actor.visibility = False
@@ -113,23 +120,11 @@ class Representation:
         self.mapper.SetScalarVisibility(True)
 
     def use_pwf(self, pwf):
-        if pwf is None:
-            return
-
-        lut = self.mapper.GetLookupTable()
-        if lut is None:
-            return
-
-        n = lut.GetNumberOfTableValues()
-        v_min, v_max = lut.GetRange()
-
-        for i in range(n):
-            r, g, b, _a = lut.GetTableValue(i)
-            t = v_min + (v_max - v_min) * i / (n - 1) if n > 1 else v_min
-            alpha = pwf.function.GetValue(t)
-            lut.SetTableValue(i, r, g, b, alpha)
-
-        self.mapper.SetScalarVisibility(True)
+        """Surface representations ignore the opacity function: slices stay
+        opaque, as on the desktop. (Baking it into the lookup table would
+        only last until the table is rebuilt, so it showed up only after a
+        sink was rebound to a port whose map was already built.) The volume
+        overrides this."""
 
     @property
     def ColorArrayName(self):

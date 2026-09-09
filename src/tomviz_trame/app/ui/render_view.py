@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from trame.ui.html import DivLayout
+from trame.widgets import html
 from trame.widgets import vtk as vtkw
 from trame.widgets import vuetify3 as v3
 
@@ -52,6 +53,16 @@ class RenderWindow(DivLayout):
                     interactive_ratio=1,
                     interactor_events=("['EndAnimation', 'LeftButtonPress']",),
                     LeftButtonPress="active_view_id = rw_data._id",
+                )
+                # The active view wears a frame in its color (the color the
+                # pipeline widget shows on the sinks drawing in it).
+                html.Div(
+                    v_show=(f"active_view_id === '{self.local_state._id}'",),
+                    classes="position-absolute",
+                    style=(
+                        f"inset: 0; border: 3px solid {self.local_state.color}; "
+                        "pointer-events: none; z-index: 1;"
+                    ),
                 )
                 with v3.VCard(
                     style=(

@@ -48,6 +48,14 @@ class SettingsDialog(v3.VDialog):
                         )
                 v3.VDivider()
                 with v3.VCardText():
+                    v3.VSwitch(
+                        v_model=("drawer_columns", True),
+                        label="Two-column drawer (pipeline left, color map and properties right)",
+                        inset=True,
+                        density="comfortable",
+                        hide_details=True,
+                        classes="mb-2",
+                    )
                     html.Label("Catalog search paths", classes="text-subtitle-2")
 
                     with v3.VList(

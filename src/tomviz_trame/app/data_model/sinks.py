@@ -25,7 +25,8 @@ class SinkNodeModel(NodeModel):
 
     representation = ServerOnly(Representation | None)
     representation_type = Sync(str, "")  # RepresentationType name, picks the UI
-    icon = Sync(str, "")
+    # The data port displayed, resolved through the sink group the sink is
+    # linked to (``inputs[0].link`` is the group's passthrough port).
     source_port = Sync(OutputPortModel, has_dataclass=True)
     view = Sync(ViewModel, has_dataclass=True)
 

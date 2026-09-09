@@ -91,3 +91,65 @@ def test_color_space_aliases():
     assert normalize_color_space("CIELAB") == "Lab"
     assert normalize_color_space("Diverging") == "Diverging"
     assert normalize_color_space("") == "RGB"
+
+
+class FakePort:
+    """Just enough of an OutputPortModel for statistics to land."""
+
+    def __init__(self, port_type="Volume", value_range=(0.0, 100.0)):
+        self.port_type = port_type
+        self.data_version = 1
+        self.image = None  # pull() returns early: no arrays to read
+        self._range = value_range
+
+    def add_consumer(self, _):
+        pass
+
+    def statistics(self, _name):
+        from types import SimpleNamespace
+
+        return SimpleNamespace(range=self._range, histogram=[1.0, 2.0, 1.0])
+
+
+def inherited(port_type="Volume"):
+    source = make_model()
+    source.load_map(COLORS, POINTS, "RGB")
+    model = ColorOpacityModel(
+        None, port=FakePort(port_type), lut=LookupTable(), pwf=PiecewiseFunction()
+    )
+    model.inherit_from(source)
+    return source, model
+
+
+def test_a_new_port_inherits_the_upstream_map():
+    source, model = inherited()
+    assert model.color_points == source.color_points
+    assert model.opacity_points == source.opacity_points
+    assert model.color_space == "RGB"
+    assert model.active_color_preset == ""
+    assert model.color_range == [10.0, 20.0]
+    assert model.lut.ctf.GetRange() == (10.0, 20.0)
+    # A copy: editing one leaves the other alone.
+    model.color_points[0][1] = 0.5
+    assert source.color_points[0][1] == 0.0
+
+
+def test_an_inherited_map_stretches_to_the_new_data_range():
+    _source, model = inherited()
+    model.acquire("sink")
+    model.active_data_array = "scalars"
+    model._apply_statistics()
+    assert model.data_range[:2] == (0.0, 100.0)
+    assert model.color_range == [0.0, 100.0]
+    model._on_color_range_change(model.color_range)  # the watcher, by hand
+    assert [row[0] for row in model.color_points] == [0.0, 50.0, 100.0]
+    assert [row[0] for row in model.opacity_points] == [0.0, 100.0]
+
+
+def test_an_inherited_label_map_keeps_its_range():
+    _source, model = inherited("LabelMap")
+    model.acquire("sink")
+    model.active_data_array = "labels"
+    model._apply_statistics()
+    assert model.data_range[:2] == (0.0, 100.0)
+    assert model.color_range == [10.0, 20.0]  # label ids are data coordinates

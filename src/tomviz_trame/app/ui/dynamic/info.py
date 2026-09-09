@@ -42,7 +42,7 @@ class DataInformation(DivLayout):
                 name="info", instance=("port?.data?._id ?? port?.data ?? null",)
             ),
         ):
-            with v3.VCard(classes="border-thin", flat=True, v_if="port?.has_data"):
+            with html.Div(v_if="port?.has_data"):
                 with v3.VTable(
                     striped="even",
                     density="compact",

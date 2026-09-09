@@ -92,6 +92,16 @@ class RepresentationSinkNode(SinkNode):
             self.model.reset_camera()
         self.model.render()
 
+    def clear_input(self):
+        """The input is gone (link or upstream node removed): hide the
+        visualization until data flows again. Event loop only."""
+        if not self._has_data:
+            return
+        self._has_data = False
+        self.representation.clear_input()
+        self.model.apply_visibility()
+        self.model.render()
+
     def detach(self):
         """Remove the representation from its view; called when the sink is
         removed from the graph."""

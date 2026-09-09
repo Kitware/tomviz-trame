@@ -6,11 +6,10 @@ One session for both formats: the second load also exercises
 
 import asyncio
 import json
-import sys
 
 import numpy as np
 import pytest
-from tomviz_pipeline import DefaultExecutor
+from tomviz_pipeline import DefaultExecutor, SinkGroupNode
 from tomviz_pipeline.core.state import pipeline_from_state_dict
 from tomviz_pipeline.dataset import Dataset
 from tomviz_pipeline.state import write_state_tvh5
@@ -169,16 +168,16 @@ async def run_session(tvsm, tvh5):
         await wait_idle(manager)
         check_session(manager, server)
         assert executed[0] == 1  # the reader ran first
-        assert set(executed) == {1, 3, 4}
+        assert set(executed) == {1, 2, 3, 4}
 
         # ---- .tvh5 in the same session: reset, then only the sinks run
         executed.clear()
         await manager.load_state_file(tvh5)
         await wait_idle(manager)
         check_session(manager, server)
-        assert set(executed) == {3, 4}
+        assert set(executed) == {2, 3, 4}  # the group runs (trivially) too
         assert len(manager.views) == 1
-        assert len(manager.model.nodes) == 3
+        assert len(manager.model.nodes) == 4
     finally:
         manager.shutdown()
         await server.stop()
@@ -187,7 +186,6 @@ async def run_session(tvsm, tvh5):
 
 def check_session(manager, server):
     pipeline = manager.pipeline
-    assert pipeline.node_by_id(2) is None  # the sink group is gone
     sinks = sinks_of(manager)
     assert set(sinks) == {3, 4}
     assert all(
@@ -200,7 +198,21 @@ def check_session(manager, server):
     port = source.primary_output_model
     assert port.has_data
     assert port.image.dimensions == SHAPE
-    assert source.sinks == {sinks[3].view._id: [sinks[3]._id, sinks[4]._id]}
+    assert port.data_location == "memory"
+    assert server.state.tip_port_id == port._id
+    assert server.state.active_port_id == port._id
+
+    # The desktop's sink group survives: the sinks read the reader's port
+    # through its passthrough, and the models mirror the links.
+    group = manager.node_models[2]
+    assert isinstance(group, data_model.SinkGroupNodeModel)
+    assert isinstance(pipeline.node_by_id(2), SinkGroupNode)
+    assert group.inputs[0].link is port
+    assert group.state == "Current"
+    for sink in sinks.values():
+        assert sink.inputs[0].link is group.outputs[0]
+        assert sink.source_port is port
+        assert sink.state == "Current"
 
     slice_model, outline = sinks[3], sinks[4]
     assert (slice_model.SliceDirection, slice_model.Slice) == ("YZ Plane", 2)
@@ -228,7 +240,9 @@ def test_state_files_load_into_a_session(state_files, tmp_path, monkeypatch):
     # the user's home); keep the test off the developer's own files.
     catalog = tmp_path / "catalog.json"
     catalog.write_text(json.dumps({"directories": [], "modules": [], "favorites": []}))
-    monkeypatch.setattr(
-        sys, "argv", ["pytest", "--catalog", str(catalog), "--read-only"]
+    # Under pytest, trame only reads its arguments from TRAME_ARGS.
+    monkeypatch.setenv(
+        "TRAME_ARGS",
+        f"--catalog {catalog} --settings {catalog.parent / 'settings.json'} --read-only",
     )
     asyncio.run(run_session(*state_files))

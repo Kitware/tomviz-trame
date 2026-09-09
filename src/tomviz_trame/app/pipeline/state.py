@@ -11,13 +11,13 @@ and the ``metadata`` of output ports (color maps, active scalars).
 Desktop specifics handled here:
 
 - Sinks hang off a passthrough ``sinkGroup`` node between the chain end
-  and the visualizations; ``collapse_sink_groups`` re-links them straight to
-  the upstream port and drops the group.
+  and the visualizations; the library builds it as a real ``SinkGroupNode``
+  and ``build_node_models`` mirrors it like any node.
 - Every sink type collapses to an inert placeholder in the library;
   ``replace_sinks`` swaps the supported ones for real
   ``RepresentationSinkNode``s (same node id, same link) and applies their
-  settings. Unsupported types stay in the graph as inert nodes, so they are
-  not lost, but they have no model and nothing shows them.
+  settings. Unsupported types stay in the graph as inert nodes with a plain
+  ``NodeModel``, so the pipeline widget lists them but nothing shows them.
 - Slice ``direction`` is XY 0, YZ 1, XZ 2, Custom 3; ``activeScalars`` may be
   the sentinel ``tomviz::DefaultScalars``.
 """
@@ -30,11 +30,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from tomviz_pipeline import Node, Pipeline, SinkNode, SourceNode, TransformNode
+from tomviz_pipeline import Pipeline, SinkGroupNode, SinkNode, TransformNode
 from tomviz_pipeline.state import load_state, read_state_json
 
 from tomviz_trame.app import data_model
 from tomviz_trame.app.parameters_gui import to_parameters_model
+from tomviz_trame.app.pipeline.graph import data_port_of, is_data_node, primary_upstream
 from tomviz_trame.app.pipeline.nodes import INPUT_PORT, RepresentationSinkNode
 from tomviz_trame.app.pipeline.representations import RepresentationType
 
@@ -43,48 +44,13 @@ if TYPE_CHECKING:
 
 STATE_EXTENSIONS = (".tvsm", ".tvh5")
 
-SINK_GROUP_TYPE = "sinkGroup"
 DEFAULT_SCALARS = "tomviz::DefaultScalars"
 SLICE_DIRECTIONS = {0: "XY Plane", 1: "YZ Plane", 2: "XZ Plane"}  # 3 = Custom
 VOLUME_INTERPOLATION = {0: "Nearest", 1: "Linear"}
 REPRESENTATION_BY_SINK_TYPE = {t.sink_type: t for t in RepresentationType}
 
 
-# ---- graph helpers (pure, no trame) -----------------------------------------
-
-
-def collapse_sink_groups(pipeline: Pipeline) -> int:
-    """Re-link the consumers of every ``sinkGroup`` to the port feeding the
-    group and remove the group. Returns the number of groups removed."""
-    removed = 0
-    for group in [n for n in pipeline.nodes if n.type_name == SINK_GROUP_TYPE]:
-        inputs = {p.name: p for p in group.input_ports()}
-        for output in group.output_ports():
-            input_name = group.type_inference_sources.get(output.name)
-            source_port = inputs.get(input_name) or next(iter(inputs.values()), None)
-            upstream = (
-                source_port.link.from_port if source_port and source_port.link else None
-            )
-            for link in list(output.outgoing_links):
-                consumer = link.to_port
-                pipeline.remove_link(link)
-                if upstream is not None:
-                    pipeline.create_link(upstream, consumer)
-        pipeline.remove_node(group)
-        removed += 1
-    return removed
-
-
-def is_data_node(node: Node) -> bool:
-    return isinstance(node, SourceNode | TransformNode)
-
-
-def primary_upstream(node: Node):
-    """The output port feeding ``node``'s first linked input, or None."""
-    for port in node.input_ports():
-        if port.link is not None:
-            return port.link.from_port
-    return None
+# ---- state helpers (pure, no trame) -----------------------------------------
 
 
 def node_description(entry: dict) -> dict:
@@ -203,8 +169,7 @@ def apply_state(manager: PipelineManager, pipeline: Pipeline, raw: dict):
     manager.reset()
     views = create_views(manager, raw)
     manager.attach_pipeline(pipeline)
-    collapse_sink_groups(pipeline)
-    build_data_models(manager, pipeline, entries)
+    build_node_models(manager, pipeline, entries)
     replace_sinks(manager, pipeline, entries, views)
 
     roots = manager.model.roots
@@ -244,12 +209,19 @@ def create_views(
     return views
 
 
-def build_data_models(manager: PipelineManager, pipeline: Pipeline, entries: dict):
-    """Mirror every source and transform node, in topological order so a
-    transform's parent model exists first."""
+def build_node_models(manager: PipelineManager, pipeline: Pipeline, entries: dict):
+    """Mirror every source, transform and sink group, in topological order so
+    a node's upstream models exist first (sinks are ``replace_sinks``'s)."""
     server = manager.server
     catalog = manager.ctx.catalog
     for node in pipeline.execution_order():
+        if isinstance(node, SinkGroupNode):
+            manager._track(
+                data_model.SinkGroupNodeModel(
+                    server, node=node, label=node.label, type_name=node.type_name
+                )
+            )
+            continue
         if not is_data_node(node):
             continue
         entry = entries.get(node.id, {})
@@ -276,7 +248,6 @@ def build_data_models(manager: PipelineManager, pipeline: Pipeline, entries: dic
             )
             model.bind_parameters()
             manager._track(model)
-            parent.downstream = [*parent.downstream, model]
         else:
             if isinstance(node, TransformNode):
                 logger.warning(
@@ -328,7 +299,8 @@ def replace_sinks(
     views: dict[int, data_model.ViewModel],
 ):
     """Swap the library's inert sink placeholders for real sinks where a
-    representation exists, keeping node ids and links."""
+    representation exists, keeping node ids and links (to the group's
+    passthrough, or straight to a data port). The others get a plain model."""
     for placeholder in [n for n in pipeline.nodes if isinstance(n, SinkNode)]:
         if isinstance(placeholder, RepresentationSinkNode):
             continue
@@ -343,24 +315,30 @@ def replace_sinks(
                 placeholder.label,
                 placeholder.type_name,
             )
+            manager._track(
+                data_model.NodeModel(
+                    manager.server,
+                    node=placeholder,
+                    label=placeholder.label,
+                    type_name=placeholder.type_name,
+                )
+            )
             continue
 
         upstream = primary_upstream(placeholder)
-        data_node = manager.node_models.get(upstream.node.id) if upstream else None
-        port_model = next(
-            (p for p in getattr(data_node, "outputs", []) if p.port is upstream), None
-        )
+        data_port = data_port_of(upstream)
+        port_model = manager.port_model_of(data_port)
         if port_model is None:
             logger.warning(
                 "Sink '{}' has no data node to display; dropped", placeholder.label
             )
             pipeline.remove_node(placeholder)
             continue
-        if not representation_type.accepts(upstream.port_type):
+        if not representation_type.accepts(data_port.port_type):
             logger.warning(
                 "Sink '{}' cannot display {} data; dropped",
                 placeholder.label,
-                upstream.port_type,
+                data_port.port_type,
             )
             pipeline.remove_node(placeholder)
             continue
@@ -375,7 +353,7 @@ def replace_sinks(
         pipeline.remove_node(placeholder)
         pipeline.add_node(sink)
         pipeline.create_link(upstream, sink.input_port(INPUT_PORT))
-        manager._register_sink(sink, data_node, view._id)
+        manager._track(sink.model)
         apply_sink_settings(sink.model, representation_type, entry)
 
 

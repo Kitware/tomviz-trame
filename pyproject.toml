@@ -15,7 +15,7 @@ dependencies = [
     "trame-colormaps>=1.5",
     "loguru",
     "vtk>=9.7",
-    "tomviz-pipeline>=3.1.5",
+    "tomviz-pipeline>=3.1.6",
     "scipy>=1.17.1",
 ]
 requires-python = ">=3.11"
@@ -54,7 +54,10 @@ build-backend = "hatchling.build"
 include = [
   "/src/tomviz_trame/**/*.py",
   "/src/tomviz_trame/app/assets/**/*",
+  "/src/tomviz_trame/app/module/serve/**/*",
   "/src/tomviz_trame/builtin_kernels/**/*",
+  "/src/tomviz_trame/widgets/module/serve/*.js",
+  "/src/tomviz_trame/widgets/module/serve/*.css",
 ]
 
 [tool.hatch.build.targets.wheel]

@@ -1,4 +1,4 @@
-"""Mirror of a ``tomviz_pipeline.OutputPort`` for the reactive UI."""
+"""Mirrors of ``tomviz_pipeline`` ports for the reactive UI."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from collections.abc import Callable
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
-from tomviz_pipeline import OutputPort
+from tomviz_pipeline import InputPort, OutputPort
 from trame.app.dataclass import ServerOnly, StateDataModel, Sync
 
 from .color_opacity import ColorOpacityModel
@@ -39,6 +39,11 @@ class OutputPortModel(StateDataModel):
     ``color_opacity`` is the shared color map of an image port, the one sinks
     use unless they switch to their own. It stays on the port, not on the
     data, so presets and opacity nodes survive re-execution.
+
+    ``persistent``, ``persistence_mode`` and ``data_location`` mirror the
+    port's persistence policy and where its payload currently is
+    (``pull_location`` refreshes the latter from the port's
+    ``data_location_changed`` signal); the widget shows them as badges.
     """
 
     port = ServerOnly(OutputPort | None)
@@ -50,12 +55,28 @@ class OutputPortModel(StateDataModel):
     data_version = Sync(int, 0)
     data = Sync(PortDataModel, has_dataclass=True)
 
+    persistent = Sync(bool, True)
+    persistence_mode = Sync(str, "memory")  # PersistenceMode value
+    data_location = Sync(str, "none")  # DataLocation value
+
     color_opacity = Sync(ColorOpacityModel, has_dataclass=True)
 
     def __init__(self, server, **kwargs):
         self._consumers: list[weakref.ref] = []
         self._pending: set[str] = set()
         super().__init__(server, **kwargs)
+        self.pull_location()
+
+    def pull_location(self):
+        """Copy the port's persistence policy and data location (event loop
+        only)."""
+        port = self.port
+        if port is None:
+            return
+        self.persistent = bool(port.persistent)
+        self.persistence_mode = port.persistence_mode.value
+        self.data_location = port.data_location().value
+        self.has_data = port.has_data()
 
     # ---- payload --------------------------------------------------------
 
@@ -174,6 +195,27 @@ class OutputPortModel(StateDataModel):
 
         logger.debug("Computing statistics of '{}' on port '{}'", key, self.name)
         run_in_background(lambda: model_class.compute_statistics(payload, key), done)
+
+
+class InputPortModel(StateDataModel):
+    """Mirror of a ``tomviz_pipeline.InputPort``: its owner ``node``,
+    ``name``, ``accepted_types`` and ``link``, the ``OutputPortModel`` feeding
+    it (None while unlinked). An input holds at most one link, so the widget
+    identifies a link by its input port."""
+
+    port = ServerOnly(InputPort | None)
+    node = Sync(NodeModel, has_dataclass=True)
+    name = Sync(str, "")
+    accepted_types = Sync(list[str], list)
+    link = Sync(OutputPortModel | None, None, has_dataclass=True)
+    # Whether the link's effective type still suits this input (the widget
+    # crosses out an input whose upstream changed type).
+    link_valid = Sync(bool, True)
+
+    def pull_link(self):
+        """Mirror the port's link validity (event loop only)."""
+        link = None if self.port is None else self.port.link
+        self.link_valid = True if link is None else bool(link.valid)
 
 
 def run_in_background(compute: Callable[[], object], done: Callable[[object], None]):

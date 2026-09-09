@@ -35,6 +35,29 @@ def lint(session: nox.Session) -> None:
 #     session.run("pylint", "parsli", *session.posargs)
 
 
+@nox.session(venv_backend="none")
+def build_js(session: nox.Session) -> None:
+    """
+    Build the Vue components (vue-components/) into the tomviz_trame.widgets module.
+    Needs node (22+) and npm on the PATH.
+    """
+    session.chdir(DIR / "vue-components")
+    session.run("npm", "install", external=True)
+    session.run("npm", "run", "build", external=True)
+
+
+@nox.session(venv_backend="none")
+def test_js(session: nox.Session) -> None:
+    """
+    Run the Vue components' unit tests, type check and lint.
+    """
+    session.chdir(DIR / "vue-components")
+    session.run("npm", "install", external=True)
+    session.run("npm", "test", external=True)
+    session.run("npm", "run", "type-check", external=True)
+    session.run("npx", "eslint", ".", external=True)
+
+
 @nox.session
 def tests(session: nox.Session) -> None:
     """

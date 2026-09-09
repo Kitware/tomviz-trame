@@ -16,7 +16,7 @@ class VolumeRepresentationUI(DivLayout):
             self,
             dataclass.Provider(name="rep", instance=("active_representation_id",)),
         ):
-            with v3.VCard(classes="border-thin pa-2 mb-2", flat=True):
+            with html.Div(classes="pa-2"):
                 # Volume settings
 
                 with v3.VRow():

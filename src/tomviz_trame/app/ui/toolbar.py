@@ -51,15 +51,25 @@ class Toolbar(v3.VAppBar):
 
             v3.VDivider(vertical=True, classes="mr-2")
 
+            # Transform picker (appends at the tip port)
+            ui.toolbar_btn(
+                icon="mdi-shape-plus-outline",
+                v_tooltip_bottom="'Add transform'",
+                disabled=("!tip_port_id",),
+                click="select_transform = true",
+            )
+
+            v3.VDivider(vertical=True, classes="mr-2")
+
             # Representations
             for rep_type in RepresentationType:
                 ui.toolbar_btn(
                     rep_type.icon,
                     v_tooltip_bottom=f"'{rep_type.label}'",
-                    disabled=("!active_view_id || !active_data_id",),
+                    disabled=("!active_view_id || !tip_port_id",),
                     click=(
                         self.ctx.pipeline.add_sink,
-                        f"[active_data_id, active_view_id, '{rep_type.name}']",
+                        f"[active_view_id, '{rep_type.name}']",
                     ),
                 )
 

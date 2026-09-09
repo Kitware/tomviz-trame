@@ -94,3 +94,39 @@ def test_parameterless_description_still_makes_a_model():
     model = to_parameters_model(None, {"name": "NoParams", "parameters": []})
     assert set() == model.FIELD_NAMES
     assert "<v-" in model.generate_gui()  # an empty column, no controls
+
+
+def test_parameter_edits_are_staged_until_applied(gaussian):
+    from tomviz_trame.app import data_model
+    from tomviz_trame.app.parameters_gui import to_parameters_model
+
+    description, script = gaussian
+    node = build_transform_node(description, script, {"sigma": 1.0})
+    model = data_model.TransformNodeModel(
+        None,
+        node=node,
+        label=node.label,
+        type_name=node.type_name,
+        entry_name="GaussianFilter",
+        parameters=to_parameters_model(None, description),
+    )
+    model.bind_parameters()
+    assert model.parameters.sigma == 1.0
+    assert model.parameters_dirty is False
+
+    # Typing in the panel edits the mirror; the watcher (called directly:
+    # watchers need a loop) only flags it, the node is untouched.
+    model.parameters.sigma = 2.5
+    model._on_parameters_change(2.5)
+    assert model.parameters_dirty is True
+    assert node.parameter("sigma") == 1.0
+
+    model.reset_parameters()
+    assert model.parameters.sigma == 1.0
+    assert model.parameters_dirty is False
+
+    model.parameters.sigma = 3.0
+    model._on_parameters_change(3.0)
+    model.apply_parameters()
+    assert node.parameter("sigma") == 3.0
+    assert model.parameters_dirty is False

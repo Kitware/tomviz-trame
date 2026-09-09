@@ -58,7 +58,7 @@ class TransformSelection(html.Div):
                         flat=True,
                         click=(
                             self.add_transform,
-                            "[active_input._id, transform_activated[0]]",
+                            "[transform_activated[0]]",
                         ),
                     )
                 with html.Div(
@@ -124,14 +124,9 @@ class TransformSelection(html.Div):
                             v_on_click_prevent="item.favorite = !item.favorite",
                         )
 
-    def add_transform(self, input_id, item_id):
+    def add_transform(self, item_id):
         item = data_model.get_instance(item_id)
-        self.ctx.pipeline.add_transform(
-            input_id,
-            item.name,
-            icon=item.icon,
-            meta=item.meta,
-        )
+        self.ctx.pipeline.add_transform(item.name, icon=item.icon, meta=item.meta)
 
     @change("transform_activated")
     def _on_active(self, transform_activated, **_):

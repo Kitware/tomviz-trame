@@ -52,14 +52,7 @@ function treeFilter(value, search, item) {
   return tokens.every((v) => item_query.indexOf(v) > -1);
 }
 
-function chainIds(node) {
-  // The node and every data node downstream of it, depth first: the drawer
-  // lists the sinks of a whole chain under its root.
-  return [node._id, ...(node.downstream || []).flatMap(chainIds)];
-}
-
 window.trame.utils.tomviz = {
-  chainIds,
   capitalize,
   enableSolidColor,
   treeFilter,
