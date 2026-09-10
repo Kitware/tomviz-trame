@@ -19,6 +19,9 @@ GRADIENT_SAMPLES = 32
 # Opacity control point defaults, as vtkPiecewiseFunction wants them.
 DEFAULT_MIDPOINT = 0.5
 DEFAULT_SHARPNESS = 0.0
+# Editor nodes closer than this are the same node: a normalized x only
+# survives the round trip through data units up to floating point error.
+NODE_TOLERANCE = 1e-9
 
 # State-file spellings of vtkColorTransferFunction color spaces.
 COLOR_SPACE_ALIASES = {"CIELAB": "Lab", "LAB": "Lab"}
@@ -39,6 +42,8 @@ class ColorOpacityModel(StateDataModel):
     the points and rescales both sets when changed. The editor works on
     normalized copies (``scaled_colors`` sampled from the VTK transfer
     function, ``scaled_opacities`` two-way) over ``data_range``.
+    ``scaled_opacities`` is only written when it differs from what the
+    editor shows, so a node the editor moved never comes back to it.
 
     Not a mirror of a graph object. It reads array names, ranges and
     histograms from its ``port`` (an ``OutputPortModel`` carrying image
@@ -91,6 +96,7 @@ class ColorOpacityModel(StateDataModel):
         self._points_range = DEFAULT_RANGE  # what the points currently span
         self._preserve_range = False  # a loaded map keeps its range once
         self._inherited = False  # copied from the upstream port's map
+        self._shown_opacities: list | None = None  # the editor's opacity nodes
         super().__init__(server, **kwargs)
         if not self.color_points:
             self.apply_preset()
@@ -225,10 +231,13 @@ class ColorOpacityModel(StateDataModel):
 
     def update_from_client_state(self, partial_state):
         """Client writes. The editor's opacity nodes come back through
-        here (and only through here: the model's own syncs never do, so
-        there is no echo to guard against), converted to data units."""
+        here, converted to data units. They are what the editor shows, so
+        the watcher recomputing ``scaled_opacities`` from the points finds
+        nothing to push: an echo lands while the user is still dragging
+        and snaps the node back to a stale position."""
         super().update_from_client_state(partial_state)
         if "scaled_opacities" in partial_state:
+            self._shown_opacities = [tuple(node) for node in self.scaled_opacities]
             self._on_scaled_opacities_edited(self.scaled_opacities)
 
     def _on_scaled_opacities_edited(self, scaled_opacities):
@@ -254,10 +263,14 @@ class ColorOpacityModel(StateDataModel):
             self.pwf.Points = [v for row in self.opacity_points for v in row]
         lo, hi = self.data_range[0], self.data_range[1]
         span = hi - lo
-        self.scaled_opacities = [
+        nodes = [
             ((row[0] - lo) / span if span else 0.0, row[1])
             for row in self.opacity_points
         ]
+        # Only news for the editor is pushed; see update_from_client_state.
+        if not _same_nodes(nodes, self._shown_opacities):
+            self._shown_opacities = nodes
+            self.scaled_opacities = nodes
 
     def _sample_gradient(self):
         """The transfer function sampled across ``data_range`` as the
@@ -350,6 +363,17 @@ class ColorOpacityModel(StateDataModel):
 def _rows(flat, width: int) -> list[list[float]]:
     values = [float(v) for v in (flat or [])]
     return [values[i : i + width] for i in range(0, len(values) - width + 1, width)]
+
+
+def _same_nodes(nodes, shown) -> bool:
+    """Whether the editor nodes ``nodes`` are those already ``shown``
+    (``None`` before the first push), within ``NODE_TOLERANCE``."""
+    if shown is None or len(nodes) != len(shown):
+        return False
+    return all(
+        abs(x - shown_x) <= NODE_TOLERANCE and abs(y - shown_y) <= NODE_TOLERANCE
+        for (x, y), (shown_x, shown_y) in zip(nodes, shown, strict=True)
+    )
 
 
 def _rescale_rows(rows, new_range, old_range=None) -> list[list[float]]:

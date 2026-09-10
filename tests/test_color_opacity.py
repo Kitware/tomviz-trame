@@ -1,3 +1,7 @@
+import asyncio
+
+import pytest
+
 from tomviz_trame.app.data_model.color_opacity import (
     ColorOpacityModel,
     normalize_color_space,
@@ -153,3 +157,40 @@ def test_an_inherited_label_map_keeps_its_range():
     model._apply_statistics()
     assert model.data_range[:2] == (0.0, 100.0)
     assert model.color_range == [10.0, 20.0]  # label ids are data coordinates
+
+
+def test_editor_edits_are_not_echoed_back():
+    """A node the editor moved must not come back from the server: the
+    echo lands while the user is still dragging and snaps the node to a
+    stale position. Server-side changes still reach the editor."""
+
+    async def run():
+        model = make_model()
+        model.data_range = (0.0, 100.0, 1.0)
+        await model.completion()
+        pushed = []
+        model.register_flush_implementation(lambda msg: pushed.append(msg["state"]))
+
+        # The client sends JS arrays, one message per mouse move.
+        model.update_from_client_state(
+            {"scaled_opacities": [[0.0, 0.0], [0.37, 0.61], [1.0, 1.0]]}
+        )
+        await model.completion()
+        assert [row[0] for row in model.opacity_points] == pytest.approx(
+            [0.0, 37.0, 100.0]
+        )
+        assert model.pwf.function.GetValue(37.0) == pytest.approx(0.61)
+        assert not any("scaled_opacities" in state for state in pushed)
+
+        # A new data range renormalizes the nodes: that is news.
+        model.data_range = (0.0, 200.0, 1.0)
+        await model.completion()
+        echoes = [s["scaled_opacities"] for s in pushed if "scaled_opacities" in s]
+        assert len(echoes) == 1
+        assert echoes[0] == [
+            pytest.approx((0.0, 0.0)),
+            pytest.approx((0.185, 0.61)),
+            pytest.approx((0.5, 1.0)),
+        ]
+
+    asyncio.run(run())

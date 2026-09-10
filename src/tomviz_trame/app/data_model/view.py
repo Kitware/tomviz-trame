@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from trame.app.dataclass import (
     ServerOnly,
     StateDataModel,
@@ -31,6 +33,7 @@ class ViewModel(StateDataModel):
 
     def __init__(self, server, **kwargs):
         self.camera_initialized = False
+        self._render_pending = False
         super().__init__(server, **kwargs)
 
     @watch("interactive_3d")
@@ -39,7 +42,7 @@ class ViewModel(StateDataModel):
             return
 
         self.vtk_view.interaction_mode = "3D" if interactive_3d else "2D"
-        self.widget_view.update()
+        self.render()
 
     @watch("orientation_axes_visibility")
     def _on_axes_visibility(self, orientation_axes_visibility):
@@ -47,7 +50,7 @@ class ViewModel(StateDataModel):
             return
 
         self.vtk_view.orientation_axes_visibility = bool(orientation_axes_visibility)
-        self.widget_view.update()
+        self.render()
 
     @watch("center_axes_visibility")
     def _on_center_visibility(self, center_axes_visibility):
@@ -55,7 +58,7 @@ class ViewModel(StateDataModel):
             return
 
         self.vtk_view.center_axes_visibility = bool(center_axes_visibility)
-        self.widget_view.update()
+        self.render()
 
     @watch("background")
     def _on_background(self, background):
@@ -63,12 +66,26 @@ class ViewModel(StateDataModel):
             return
 
         self.vtk_view.background = tuple(background)
-        self.widget_view.update()
+        self.render()
 
     def render(self):
-        if self.widget_view is None:
+        """Push a new image to the client, the expensive part of any
+        property edit. Requests made in the same loop iteration (every
+        sink coloring through an edited map asks) are merged into one."""
+        if self.widget_view is None or self._render_pending:
             return
-        self.widget_view.update()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            self.widget_view.update()
+            return
+        self._render_pending = True
+        loop.call_soon(self._render_now)
+
+    def _render_now(self):
+        self._render_pending = False
+        if self.widget_view is not None:
+            self.widget_view.update()
 
     def reset_camera(self):
         if self.widget_view is None:
