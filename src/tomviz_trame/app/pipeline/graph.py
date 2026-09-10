@@ -22,7 +22,6 @@ from tomviz_pipeline import (
 
 from tomviz_trame.app.utils.data import IMAGE_PORT_TYPES
 
-
 __all__ = [
     "compatible_output",
     "data_port_of",

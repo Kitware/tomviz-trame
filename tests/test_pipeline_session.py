@@ -224,7 +224,9 @@ async def run_session(tiff):
         for sink in sinks:
             assert sink.node.representation.image is None
             assert not sink.node.representation.actor.visibility
-        assert not manager.create_link(transform.outputs[0]._id, transform.inputs[0]._id)
+        assert not manager.create_link(
+            transform.outputs[0]._id, transform.inputs[0]._id
+        )
         assert manager.create_link(transform.outputs[0]._id, group_input._id)
         await wait_idle(manager)
         assert group_input.link is transform.outputs[0]
@@ -238,9 +240,9 @@ async def run_session(tiff):
         slice_model = next(s for s in sinks if s.representation_type == "SLICE")
         lut = slice_model.representation.mapper.GetLookupTable()
         assert lut is slice_model.color_opacity.lut.table
-        assert {lut.GetTableValue(i)[3] for i in range(lut.GetNumberOfTableValues())} == {
-            1.0
-        }
+        assert {
+            lut.GetTableValue(i)[3] for i in range(lut.GetNumberOfTableValues())
+        } == {1.0}
         assert slice_model.representation.actor.visibility
         assert [a["id"] for a in manager.menu_actions("link", group_input._id)] == [
             "delete"
@@ -252,7 +254,11 @@ async def run_session(tiff):
         await settle()
         assert (out.persistent, out.persistence_mode) == (True, "disk")
         actions = manager.menu_actions("port", out._id)
-        assert [a["id"] for a in actions] == ["persist_memory", "persist_disk", "transient"]
+        assert [a["id"] for a in actions] == [
+            "persist_memory",
+            "persist_disk",
+            "transient",
+        ]
         assert [a["checked"] for a in actions] == [False, True, False]
         manager.set_port_persistence(out._id, "transient")
         await settle()

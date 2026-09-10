@@ -36,6 +36,7 @@ from tomviz_pipeline.state import load_state, read_state_json
 from tomviz_trame.app import data_model
 from tomviz_trame.app.parameters_gui import to_parameters_model
 from tomviz_trame.app.pipeline.graph import data_port_of, is_data_node, primary_upstream
+from tomviz_trame.app.pipeline.layout import dockview_layout
 from tomviz_trame.app.pipeline.nodes import INPUT_PORT, RepresentationSinkNode
 from tomviz_trame.app.pipeline.representations import RepresentationType
 
@@ -206,7 +207,34 @@ def create_views(
         if entry.get("active") or active_view_id is None:
             active_view_id = view_id
     manager.state.active_view_id = active_view_id
+    restore_layout(manager, raw, views, active_view_id)
     return views
+
+
+def restore_layout(
+    manager: PipelineManager,
+    raw: dict,
+    views: dict[int, data_model.ViewModel],
+    active_view_id: str | None,
+):
+    """Arrange the render windows like the state file's first layout (the
+    desktop's ``layouts``); without one, or when it does not account for
+    every view, the windows stay where ``add_view`` put them."""
+    entries = raw.get("layouts") or []
+    if not entries or not views:
+        return
+    panels = {
+        saved_id: manager.panel_entry(view._id) for saved_id, view in views.items()
+    }
+    active_saved_id = next(
+        (saved_id for saved_id, view in views.items() if view._id == active_view_id),
+        None,
+    )
+    layout = dockview_layout(entries[0], panels, active_saved_id)
+    if layout is None:
+        logger.info("View layout not restored: it does not match the views")
+        return
+    manager.restore_layout(layout)
 
 
 def build_node_models(manager: PipelineManager, pipeline: Pipeline, entries: dict):

@@ -106,6 +106,20 @@ def state_dict(tiff_path):
                 "backgroundColor": [[0.1, 0.2, 0.3]],
                 "camera": CAMERA,
                 "isOrthographic": False,
+            },
+            {"id": VIEW_ID + 1, "interactionMode": "2D"},
+        ],
+        # The desktop's layout: the two views side by side, 40 / 60.
+        "layouts": [
+            {
+                "id": 1,
+                "items": [
+                    [
+                        {"direction": 2, "fraction": 0.4, "viewId": 0},
+                        {"direction": 0, "fraction": 0.5, "viewId": VIEW_ID},
+                        {"direction": 0, "fraction": 0.5, "viewId": VIEW_ID + 1},
+                    ]
+                ],
             }
         ],
     }
@@ -161,12 +175,15 @@ async def run_session(tvsm, tvh5):
     manager = app.ctx.pipeline
     executed = []
     manager.executor.node_execution_started.connect(lambda n: executed.append(n.id))
+    layouts = []
+    manager.restore_layout = layouts.append  # what would reach dockview
 
     try:
         # ---- .tvsm: everything re-executes
         await manager.load_state_file(tvsm)
         await wait_idle(manager)
         check_session(manager, server)
+        check_layout(manager, server, layouts[-1])
         assert executed[0] == 1  # the reader ran first
         assert set(executed) == {1, 2, 3, 4}
 
@@ -176,7 +193,8 @@ async def run_session(tvsm, tvh5):
         await wait_idle(manager)
         check_session(manager, server)
         assert set(executed) == {2, 3, 4}  # the group runs (trivially) too
-        assert len(manager.views) == 1
+        assert len(manager.views) == 2
+        assert len(layouts) == 2  # one restore per load
         assert len(manager.model.nodes) == 4
     finally:
         manager.shutdown()
@@ -233,6 +251,26 @@ def check_session(manager, server):
     camera = view.vtk_view.camera
     assert camera["position"] == CAMERA["position"]  # not refit by the data
     assert camera["parallelProjection"] is False
+
+
+def check_layout(manager, server, layout):
+    """The two windows side by side, 40 / 60, the first one active."""
+    active = manager.views[server.state.active_view_id]
+    other = next(v for v in manager.views.values() if v is not active)
+    grid = layout["grid"]
+    assert grid["orientation"] == "HORIZONTAL"
+    left, right = grid["root"]["data"]
+    assert (left["data"]["views"], left["size"]) == ([active.vtk_id], 400.0)
+    assert (right["data"]["views"], right["size"]) == ([other.vtk_id], 600.0)
+    assert layout["activeGroup"] == left["data"]["id"]
+    entry = layout["panels"][active.vtk_id]
+    assert entry["contentComponent"] == "DockPanel"
+    assert entry["tabComponent"] == "tomviz-dockview-tab"
+    assert entry["params"] == {
+        "templateName": active.tpl_name,
+        "viewState": active.local_state._id,
+    }
+    assert other.local_state.interactive_3d is False
 
 
 def test_state_files_load_into_a_session(state_files, tmp_path, monkeypatch):

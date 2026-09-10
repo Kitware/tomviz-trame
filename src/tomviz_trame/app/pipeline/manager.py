@@ -528,6 +528,9 @@ class PipelineManager(TrameComponent):
     # Views
     # -------------------------------------------------------------------------
 
+    PANEL_TITLE = "3D View"
+    PANEL_TAB = "tomviz-dockview-tab"
+
     def add_view(self) -> str:
         # Imported here: `ui` imports this package at module level.
         from tomviz_trame.app import ui
@@ -535,17 +538,40 @@ class PipelineManager(TrameComponent):
         view = ui.RenderWindow(self.server)
         logger.debug("Add view {} vs {}", view.local_state._id, view.vtk_id)
         self.views[view.local_state._id] = view
+        self._add_panel(view)
+        return view.local_state._id
+
+    def _add_panel(self, view):
         self.ctx.dock_view.add_panel(
             view.vtk_id,
-            "3D View",
+            self.PANEL_TITLE,
             view.tpl_name,
-            tabComponent="tomviz-dockview-tab",
-            params={
-                "templateName": view.tpl_name,
-                "viewState": view.local_state._id,
-            },
+            tabComponent=self.PANEL_TAB,
+            params=self._panel_params(view),
         )
-        return view.local_state._id
+
+    @staticmethod
+    def _panel_params(view) -> dict:
+        return {"templateName": view.tpl_name, "viewState": view.local_state._id}
+
+    def panel_entry(self, view_id: str) -> dict | None:
+        """The dockview description of ``view_id``'s panel, what a restored
+        layout (``pipeline/layout.py``) lists under ``panels``."""
+        view = self.views.get(view_id)
+        if view is None:
+            return None
+        return {
+            "id": view.vtk_id,
+            "title": self.PANEL_TITLE,
+            "contentComponent": "DockPanel",
+            "tabComponent": self.PANEL_TAB,
+            "params": self._panel_params(view),
+        }
+
+    def restore_layout(self, layout: dict):
+        """Arrange the existing panels as ``layout`` says (a dockview
+        layout; the panels are reused by id)."""
+        self.ctx.dock_view.restore_layout(layout)
 
     @trigger("remove_view")
     def remove_view(self, view_id: str):
@@ -593,16 +619,7 @@ class PipelineManager(TrameComponent):
     def refresh_views(self, **_):
         """Register all views into dockview"""
         for view in self.views.values():
-            self.ctx.dock_view.add_panel(
-                view.vtk_id,
-                "3D View",
-                view.tpl_name,
-                tabComponent="tomviz-dockview-tab",
-                params={
-                    "templateName": view.tpl_name,
-                    "viewState": view.local_state._id,
-                },
-            )
+            self._add_panel(view)
 
     # -------------------------------------------------------------------------
     # Transforms
