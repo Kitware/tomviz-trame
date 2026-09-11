@@ -3,6 +3,7 @@ import asyncio
 import pytest
 
 from tomviz_trame.app.data_model.color_opacity import (
+    ECHO_WINDOW,
     ColorOpacityModel,
     normalize_color_space,
 )
@@ -194,3 +195,76 @@ def test_editor_edits_are_not_echoed_back():
         ]
 
     asyncio.run(run())
+
+
+def test_a_stale_echo_of_pushed_nodes_does_not_move_the_points():
+    """The trame-dataclass client (<= 2.2.0) writes an *older* server push
+    back when two pushes of a field land during one in-flight request.
+    While the range slider drags, such an echo of ``scaled_opacities`` used
+    to land as an edit and drag the points back to a range the slider had
+    left, so they drifted out of step with the color range."""
+
+    async def run():
+        model = make_model()
+        model.data_range = (0.0, 100.0, 1.0)
+        await model.completion()
+        pushed = []
+        model.register_flush_implementation(lambda msg: pushed.append(msg["state"]))
+
+        # Two slider ticks: the server pushes the nodes for each.
+        model.update_from_client_state({"color_range": [0, 50]})
+        await model.completion()
+        model.update_from_client_state({"color_range": [0, 25]})
+        await model.completion()
+        echoes = [s["scaled_opacities"] for s in pushed if "scaled_opacities" in s]
+        assert echoes == [[(0.0, 0.0), (0.5, 1.0)], [(0.0, 0.0), (0.25, 1.0)]]
+
+        # The next tick carries the client's echo of the first push.
+        model.update_from_client_state(
+            {"color_range": [0, 20], "scaled_opacities": [[0, 0], [0.5, 1]]}
+        )
+        await model.completion()
+        assert [row[0] for row in model.opacity_points] == [0.0, 20.0]
+        assert model.scaled_opacities == [(0.0, 0.0), (0.2, 1.0)]
+        assert model.pwf.function.GetValue(20.0) == 1.0
+
+    asyncio.run(run())
+
+
+def test_server_owned_fields_ignore_client_writes():
+    """The editor never writes the points, ranges or samples: a client
+    write of those is an echo of an older push and must not become the
+    truth."""
+    model = make_model()
+    model.load_map(COLORS, POINTS, "RGB")
+    model.update_from_client_state(
+        {
+            "opacity_points": [[10.0, 0.0, 0.5, 0.0], [15.0, 1.0, 0.5, 0.0]],
+            "color_points": [[10.0, 0.0, 0.0, 0.0], [15.0, 1.0, 1.0, 1.0]],
+            "data_range": (0.0, 1.0, 1.0),
+            "scaled_colors": [(0.0, (0.0, 0.0, 0.0))],
+        }
+    )
+    assert model.to_state()["points"] == POINTS
+    assert model.to_state()["colors"] == COLORS
+    assert model.data_range == (0, 255, 1)
+    assert len(model.scaled_colors) > 1
+
+
+def test_an_old_push_becomes_an_edit_again_after_the_echo_window():
+    """Echoes arrive within a couple of client messages of the push; a
+    matching write later on is the user moving nodes to those positions."""
+    model = make_model()
+    model.data_range = (0.0, 100.0, 1.0)
+    model._update_pwf()  # pushes [(0, 0), (0.01, 1)]
+    old_push = [(0.0, 0.0), (0.01, 1.0)]
+    model.update_from_client_state({"scaled_opacities": [[0, 0], [0.5, 1]]})
+    assert [row[0] for row in model.opacity_points] == [0.0, 50.0]
+
+    model.update_from_client_state({"scaled_opacities": old_push})  # an echo
+    assert [row[0] for row in model.opacity_points] == [0.0, 50.0]
+
+    for _ in range(ECHO_WINDOW):
+        model.update_from_client_state({"color_range": [0.0, 50.0]})
+    model.update_from_client_state({"scaled_opacities": old_push})  # an edit
+    assert [row[0] for row in model.opacity_points] == [0.0, 1.0]

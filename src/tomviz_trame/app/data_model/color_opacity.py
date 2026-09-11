@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import deque
 from typing import TYPE_CHECKING
 
 from trame.app.dataclass import ServerOnly, StateDataModel, Sync, watch
@@ -23,6 +24,27 @@ DEFAULT_SHARPNESS = 0.0
 # survives the round trip through data units up to floating point error.
 NODE_TOLERANCE = 1e-9
 
+# The fields the color editor writes. A client write of any other field is
+# an echo of a server push, see ``ColorOpacityModel.update_from_client_state``.
+CLIENT_FIELDS = frozenset(
+    {
+        "color_range",
+        "active_color_preset",
+        "invert_color_preset",
+        "active_data_array",
+        "solid_color",
+        "scaled_opacities",
+    }
+)
+# A client write of ``scaled_opacities`` equal to a node set pushed within
+# this many client messages is an echo. The client sends an echo in the
+# first message after the request that was in flight when the push landed,
+# so from here it arrives in the first or second message after the push.
+ECHO_WINDOW = 3
+# Pushes remembered for that check (bounded for pushes with no client
+# messages in between, e.g. executions).
+ECHO_HISTORY = 64
+
 # State-file spellings of vtkColorTransferFunction color spaces.
 COLOR_SPACE_ALIASES = {"CIELAB": "Lab", "LAB": "Lab"}
 
@@ -44,6 +66,14 @@ class ColorOpacityModel(StateDataModel):
     function, ``scaled_opacities`` two-way) over ``data_range``.
     ``scaled_opacities`` is only written when it differs from what the
     editor shows, so a node the editor moved never comes back to it.
+
+    Interim guard (remove once the pinned trame-dataclass carries the fix):
+    the trame-dataclass client (<= 2.2.0) queues an echo of every server
+    push and, when two pushes of one field land during one in-flight
+    request, writes the *older* one back as if the user had edited it.
+    ``update_from_client_state`` therefore ignores writes of fields the
+    editor never writes and ``scaled_opacities`` writes equal to a recent
+    push.
 
     Not a mirror of a graph object. It reads array names, ranges and
     histograms from its ``port`` (an ``OutputPortModel`` carrying image
@@ -97,6 +127,8 @@ class ColorOpacityModel(StateDataModel):
         self._preserve_range = False  # a loaded map keeps its range once
         self._inherited = False  # copied from the upstream port's map
         self._shown_opacities: list | None = None  # the editor's opacity nodes
+        self._client_messages = 0  # client writes received, for the echo window
+        self._pushed_opacities: deque = deque(maxlen=ECHO_HISTORY)  # (msg, nodes)
         super().__init__(server, **kwargs)
         if not self.color_points:
             self.apply_preset()
@@ -234,11 +266,35 @@ class ColorOpacityModel(StateDataModel):
         here, converted to data units. They are what the editor shows, so
         the watcher recomputing ``scaled_opacities`` from the points finds
         nothing to push: an echo lands while the user is still dragging
-        and snaps the node back to a stale position."""
+        and snaps the node back to a stale position.
+
+        Writes of fields the editor never writes, and opacity nodes equal
+        to a set pushed in the last ``ECHO_WINDOW`` messages, are echoes of
+        server pushes (see the class docstring) and are dropped: applied,
+        they would move the points back to a range the slider has already
+        left."""
+        self._client_messages += 1
+        partial_state = {k: v for k, v in partial_state.items() if k in CLIENT_FIELDS}
+        if "scaled_opacities" in partial_state and self._is_echo(
+            partial_state["scaled_opacities"]
+        ):
+            del partial_state["scaled_opacities"]
+        if not partial_state:
+            return
         super().update_from_client_state(partial_state)
         if "scaled_opacities" in partial_state:
             self._shown_opacities = [tuple(node) for node in self.scaled_opacities]
             self._on_scaled_opacities_edited(self.scaled_opacities)
+
+    def _is_echo(self, scaled_opacities) -> bool:
+        """Whether ``scaled_opacities`` (a client write) repeats a node set
+        pushed within the echo window."""
+        nodes = [tuple(node) for node in scaled_opacities]
+        oldest = self._client_messages - ECHO_WINDOW
+        return any(
+            message >= oldest and _same_nodes(nodes, pushed)
+            for message, pushed in self._pushed_opacities
+        )
 
     def _on_scaled_opacities_edited(self, scaled_opacities):
         """The editor moved opacity nodes: back to data units."""
@@ -270,6 +326,7 @@ class ColorOpacityModel(StateDataModel):
         # Only news for the editor is pushed; see update_from_client_state.
         if not _same_nodes(nodes, self._shown_opacities):
             self._shown_opacities = nodes
+            self._pushed_opacities.append((self._client_messages, nodes))
             self.scaled_opacities = nodes
 
     def _sample_gradient(self):
