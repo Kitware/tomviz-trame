@@ -52,7 +52,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build]
 include = [
-  "/src/**/*.py",
+  "/src/tomviz_web/**/*.py",
   "/src/tomviz_web/app/assets/**/*",
   "/src/tomviz_web/app/module/serve/**/*",
   "/src/tomviz_web/builtin_kernels/**/*",

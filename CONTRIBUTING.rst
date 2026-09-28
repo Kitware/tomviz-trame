@@ -1,6 +1,6 @@
-============================
-Contributing to tomviz-trame
-============================
+==========================
+Contributing to tomviz-web
+==========================
 
 #. Clone the repository using ``git clone``
 #. Install pre-commit via ``pip install pre-commit``
