@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "Vue 3 components of the tomviz-trame application (pipeline widget)",
+  "description": "Vue 3 components of the tomviz-web application (pipeline widget)",
   "scripts": {
     "dev": "vite build --emptyOutDir --watch",
     "build": "run-p type-check \"build-only {@}\" --",

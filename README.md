@@ -1,8 +1,8 @@
-# tomviz-trame
+# tomviz-web
 
 trame and VTK based web version of the tomviz tomography application
 
-![tomviz](https://raw.githubusercontent.com/Kitware/tomviz-trame/main/tomviz.png)
+![tomviz](https://raw.githubusercontent.com/Kitware/tomviz-web/main/tomviz.png)
 
 ## License
 
