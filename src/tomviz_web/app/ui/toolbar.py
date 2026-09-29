@@ -51,11 +51,11 @@ class Toolbar(v3.VAppBar):
 
             v3.VDivider(vertical=True, classes="mr-2")
 
-            # Transform picker (appends at the tip port)
+            # Catalog picker: transforms append at the tip port, sources start
+            # a pipeline (so it opens before any data is loaded)
             ui.toolbar_btn(
                 icon="mdi-shape-plus-outline",
                 v_tooltip_bottom="'Add transform'",
-                disabled=("!tip_port_id",),
                 click="select_transform = true",
             )
 

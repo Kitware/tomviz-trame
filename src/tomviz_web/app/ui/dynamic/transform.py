@@ -8,9 +8,10 @@ TEMPLATE = "transform"
 
 
 class TransformUI(DivLayout):
-    """Parameter panel of the active transform node: the generated GUI of
-    its ``parameters`` model. Edits are staged in the mirror until Apply
-    pushes them to the node (Reset drops them)."""
+    """Parameter panel of the active catalog node (a transform, or a source
+    built from the catalog): the generated GUI of its ``parameters`` model.
+    Edits are staged in the mirror until Apply pushes them to the node
+    (Reset drops them)."""
 
     def __init__(self, server, template_name=TEMPLATE):
         super().__init__(server, template_name=template_name)

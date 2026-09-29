@@ -1,6 +1,6 @@
 """The catalog tree shown in the transform picker. These are not graph nodes:
-an item becomes a ``TransformNodeModel`` (and a graph node) only once it is
-added to a pipeline."""
+an item becomes a ``TransformNodeModel``, or a ``SourceNodeModel`` for a
+source (and a graph node), only once it is added to a pipeline."""
 
 from trame.app.dataclass import StateDataModel, Sync, watch
 

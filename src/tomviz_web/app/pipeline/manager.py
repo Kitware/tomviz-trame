@@ -30,6 +30,7 @@ from tomviz_web.app.pipeline.nodes import (
     INPUT_PORT,
     ReaderSourceNode,
     RepresentationSinkNode,
+    build_source_node,
     build_transform_node,
     register_nodes,
 )
@@ -490,6 +491,48 @@ class PipelineManager(TrameComponent):
         source = data_model.SourceNodeModel(
             self.server, node=node, label=node.label, type_name=node.type_name
         )
+        return self._add_source_model(source)
+
+    def add_source(
+        self,
+        entry_name: str,
+        icon: str | None = None,
+        meta: dict | None = None,
+        parameters: dict | None = None,
+        execute: bool = True,
+        **_,
+    ) -> str | None:
+        """Start a pipeline with the catalog source ``entry_name`` (a
+        schema-v2 kernel without inputs), like loading a file does: it
+        becomes the tip, gets the default visualizations and the selection.
+        Its parameters are edited in the panel afterwards. Returns the id of
+        the new model."""
+        entry = self.ctx.catalog.entries.get(entry_name)
+        if entry is None:
+            logger.error("Unknown catalog entry '{}'", entry_name)
+            return None
+
+        description = meta or entry.json
+        node = build_source_node(description, entry.file, parameters)
+        self.pipeline.add_node(node)
+
+        source = data_model.SourceNodeModel(
+            self.server,
+            node=node,
+            label=node.label,
+            type_name=node.type_name,
+            entry_name=entry.name,
+            icon=icon or entry.icon,
+            parameters=to_parameters_model(self.server, description),
+        )
+        source.bind_parameters()
+        return self._add_source_model(source, execute=execute)
+
+    def _add_source_model(
+        self, source: data_model.SourceNodeModel, execute: bool = True
+    ) -> str:
+        """Mirror a source already in the graph, make its output the tip with
+        the default visualizations, and select it."""
         self._track(source)
         self.set_tip_port(source.primary_output)
 
@@ -499,7 +542,8 @@ class PipelineManager(TrameComponent):
         # make new data node active by default
         self.model.active_node = [source._id]
 
-        self.execute()
+        if execute:
+            self.execute()
 
         return source._id
 
@@ -1141,7 +1185,8 @@ class PipelineManager(TrameComponent):
             s.property_templates = []
             if isinstance(obj, data_model.DataNodeModel):
                 s.active_data_id = obj._id
-                if isinstance(obj, data_model.TransformNodeModel):
+                # Catalog sources and transforms have parameters, readers not.
+                if obj.parameters is not None:
                     s.property_templates = [DYNAMIC_TEMPLATES.get("transform")]
             elif isinstance(obj, data_model.SinkNodeModel):
                 s.active_data_id = obj.data_node._id if obj.data_node else None

@@ -285,9 +285,21 @@ def build_node_models(manager: PipelineManager, pipeline: Pipeline, entries: dic
                     node.label,
                     node.id,
                 )
+            # A Python source carries its description (and so parameters to
+            # edit); a file reader does not.
+            catalog_entry = catalog.entries.get(name) if description else None
             model = data_model.SourceNodeModel(
-                server, node=node, label=node.label, type_name=node.type_name
+                server,
+                node=node,
+                label=node.label,
+                type_name=node.type_name,
+                entry_name=name if description else "",
+                icon=catalog_entry.icon if catalog_entry else "",
+                parameters=(
+                    to_parameters_model(server, description) if description else None
+                ),
             )
+            model.bind_parameters()
             manager._track(model)
 
         apply_port_metadata(model, entry)

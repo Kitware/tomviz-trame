@@ -91,47 +91,19 @@ class NodeModel(StateDataModel):
 
 class DataNodeModel(NodeModel):
     """A node that produces data: sources and transforms. The first output
-    is the primary one sinks and downstream nodes read by default."""
+    is the primary one sinks and downstream nodes read by default.
 
-    @property
-    def primary_output(self) -> OutputPort | None:
-        """The library port sinks and downstream nodes read from."""
-        if self.node is None:
-            return None
-        ports = self.node.output_ports()
-        return ports[0] if ports else None
-
-    @property
-    def primary_output_model(self):
-        """The ``OutputPortModel`` of the primary output."""
-        return self.outputs[0] if self.outputs else None
-
-    @property
-    def color_opacity(self):
-        """The shared color map of the primary output."""
-        port = self.primary_output_model
-        return None if port is None else port.color_opacity
-
-
-class SourceNodeModel(DataNodeModel):
-    """Mirror of a ``SourceNode``: a file reader today."""
-
-
-class TransformNodeModel(DataNodeModel):
-    """Mirror of a ``TransformNode``: a catalog transform applied to
-    ``input``. ``entry_name`` is the catalog entry it was built from.
-
-    ``parameters`` mirrors ``Node.parameters``: it is the dataclass
-    ``parameters_gui`` generates from the entry's JSON (one synced field per
-    parameter). ``bind_parameters`` copies the node's values into it and
-    watches it: edits only mark the mirror ``parameters_dirty``; the panel's
-    Apply button calls ``apply_parameters``, which pushes them with
-    ``set_parameters`` (re-executing the graph), and Reset calls
-    ``reset_parameters``.
+    A node built from a catalog entry (``entry_name``) has ``parameters``:
+    they mirror ``Node.parameters``, as the dataclass ``parameters_gui``
+    generates from the entry's JSON (one synced field per parameter).
+    ``bind_parameters`` copies the node's values into it and watches it:
+    edits only mark the mirror ``parameters_dirty``; the panel's Apply button
+    calls ``apply_parameters``, which pushes them with ``set_parameters``
+    (re-executing the graph), and Reset calls ``reset_parameters``. A file
+    reader has none.
     """
 
     entry_name = Sync(str)
-    input = Sync(DataNodeModel | None, None, has_dataclass=True)
     parameters = Sync(StateDataModel, has_dataclass=True)
     parameters_dirty = Sync(bool, False)  # the mirror differs from the node
 
@@ -200,6 +172,37 @@ class TransformNodeModel(DataNodeModel):
                 self.parameters, name, coerce_like(current, self.node.parameters[name])
             )
         self.parameters_dirty = False
+
+    @property
+    def primary_output(self) -> OutputPort | None:
+        """The library port sinks and downstream nodes read from."""
+        if self.node is None:
+            return None
+        ports = self.node.output_ports()
+        return ports[0] if ports else None
+
+    @property
+    def primary_output_model(self):
+        """The ``OutputPortModel`` of the primary output."""
+        return self.outputs[0] if self.outputs else None
+
+    @property
+    def color_opacity(self):
+        """The shared color map of the primary output."""
+        port = self.primary_output_model
+        return None if port is None else port.color_opacity
+
+
+class SourceNodeModel(DataNodeModel):
+    """Mirror of a ``SourceNode``: a file reader, or a catalog source (a
+    schema-v2 kernel without inputs) with its ``parameters``."""
+
+
+class TransformNodeModel(DataNodeModel):
+    """Mirror of a ``TransformNode``: a catalog transform applied to
+    ``input``."""
+
+    input = Sync(DataNodeModel | None, None, has_dataclass=True)
 
 
 class SinkGroupNodeModel(NodeModel):

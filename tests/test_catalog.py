@@ -41,12 +41,15 @@ def test_builtin_entries_come_from_tomviz_kernels(tmp_path):
     }
     assert set(catalog.entries) == names
 
-    # Sources are registered but not offered: the app cannot add one yet.
+    # Sources are offered, except those needing periodic execution (a live
+    # acquisition), which the app cannot run yet.
     sources = {name for name, entry in catalog.entries.items() if entry.is_source}
-    assert "ConstantDataset" in sources
+    assert {"ConstantDataset", "SimulatedLiveAcquisition"} <= sources
+    live = {name for name, entry in catalog.entries.items() if entry.auto_executes}
+    assert live == {"SimulatedLiveAcquisition"}
     offered = set(_item_names(catalog.root))
-    assert offered == names - sources
-    assert "GaussianFilter" in offered
+    assert offered == names - live
+    assert {"GaussianFilter", "ConstantDataset"} <= offered
 
 
 def test_nameless_entries_are_named_after_their_script(tmp_path):
