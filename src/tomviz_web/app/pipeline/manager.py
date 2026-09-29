@@ -634,8 +634,11 @@ class PipelineManager(TrameComponent):
         the tip port; a group's passthrough resolves to the port feeding it).
         The sinks and groups reading the port move to a compatible output of
         the transform; downstream transforms stay, so inserting mid-chain
-        branches. The new node becomes the selection. Returns the id of the
-        new model."""
+        branches. The new node becomes the selection. Only its first input is
+        linked: a transform with more inputs (a ``dataset`` parameter, a
+        schema-v2 kernel's extra ``inputs``) waits for the user to link them,
+        and ``create_link`` runs it then (desktop parity). Returns the id of
+        the new model."""
         entry = self.ctx.catalog.entries.get(entry_name)
         if entry is None:
             logger.error("Unknown catalog entry '{}'", entry_name)
@@ -678,7 +681,14 @@ class PipelineManager(TrameComponent):
         self._refresh_sink_sources()
         self.model.active_node = [model._id]
 
-        if execute:
+        unlinked = [port.name for port in node.input_ports() if port.link is None]
+        if unlinked:
+            logger.info(
+                "'{}' runs once its other inputs are linked: {}",
+                node.label,
+                ", ".join(unlinked),
+            )
+        elif execute:
             self.execute_when_idle()
 
         return model._id
