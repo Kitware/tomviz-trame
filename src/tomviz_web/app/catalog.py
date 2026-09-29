@@ -2,9 +2,11 @@
 
 Each entry is a JSON description plus a Python script, found by scanning
 directories: the upstream ``Name.json`` + ``Name.py`` sidecar pairs, or a
-single ``name.py`` exposing a module-level ``JSON`` dict. Today every entry
-is a transform (the desktop app calls them operators); schema-v2 source
-kernels will land in the same catalog.
+single ``name.py`` exposing a module-level ``JSON`` dict. The builtin
+entries come from the ``tomviz_kernels`` package, shared with the desktop
+app. Only transforms (the desktop app calls them operators) are offered for
+now: schema-v2 source kernels are registered but kept out of the tree until
+the app can add a source.
 
 Configuration lives in ``~/.tomviz/catalog.json`` (or ``--catalog``): the
 directories and Python modules to scan, and the user's favorites. The
@@ -33,13 +35,17 @@ DEFAULT_CONFIG = Path.home() / ".tomviz" / "catalog.json"
 LEGACY_CONFIG = Path.home() / ".tomviz" / "operators.json"
 
 DEFAULT_MODULES = [
-    "tomviz_web.builtin_kernels",
+    "tomviz_kernels",
 ]
 DEFAULT_DIRECTORIES = [
     (Path.home() / ".tomviz" / "catalog"),
 ]
 # Defaults of earlier versions, still listed by config files they wrote.
-RETIRED_MODULES = {"tomviz.operators.builtin", "tomviz_web.builtin"}
+RETIRED_MODULES = {
+    "tomviz.operators.builtin",
+    "tomviz_web.builtin",
+    "tomviz_web.builtin_kernels",
+}
 RETIRED_DIRECTORIES = {str(Path.home() / ".tomviz" / "operators")}
 
 
@@ -67,17 +73,21 @@ class CatalogEntry:
     """A definition (``json``) and the script implementing it (``file``)."""
 
     def __init__(self, json_content, py_file, module):
+        if not json_content.get("name"):
+            # Entries are keyed by name: fall back to the script's stem so
+            # nameless descriptions do not replace one another.
+            json_content = {**json_content, "name": Path(py_file).stem}
         self.json = json_content
         self.file = py_file
         self.module = module
 
     @property
     def name(self):
-        return self.json.get("name", "unnamed")
+        return self.json["name"]
 
     @property
     def label(self):
-        return self.json.get("label", "Un-Named")
+        return self.json.get("label") or self.name
 
     @property
     def tags(self):
@@ -90,6 +100,12 @@ class CatalogEntry:
     @property
     def path(self):
         return tuple(self.json.get("path", []))
+
+    @property
+    def is_source(self):
+        """A schema-v2 kernel without inputs: it starts a pipeline instead of
+        transforming data."""
+        return self.json.get("schemaVersion") == 2 and not self.json.get("inputs")
 
     def to_item(self, server, favorites):
         return data_model.CatalogItem(
@@ -310,6 +326,9 @@ class Catalog(TrameComponent):
         self.root.children = []
         tree_index = {}
         for entry in self.entries.values():
+            if entry.is_source:
+                logger.debug("Catalog source {} is not offered yet", entry.name)
+                continue
             item = entry.to_item(self.server, self.favorites)
             current_container = self.root
             current_path = []

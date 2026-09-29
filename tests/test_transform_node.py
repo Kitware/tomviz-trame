@@ -1,23 +1,34 @@
 import json
-from pathlib import Path
 
 import numpy as np
 import pytest
+import tomviz_kernels
 from tomviz_pipeline import NodeState, Pipeline, PortData, SinkNode, SourceNode
 from tomviz_pipeline.dataset import Dataset
 from tomviz_pipeline.nodes.transforms.legacy_python import LegacyPythonTransform
+from trame.app import get_server
+from trame.ui.html import DivLayout
 
 from tomviz_web.app.pipeline.nodes import INPUT_PORT, build_transform_node
 
 pytest.importorskip("scipy")
 
-BUILTIN = Path(__file__).parent.parent / "src" / "tomviz_web" / "builtin_kernels"
+KERNELS = tomviz_kernels.directory()
+
+
+@pytest.fixture(autouse=True, scope="module")
+def html_context():
+    """The parameter panels are generated as widgets without a server; like
+    in the app, they take the one of the layout being built."""
+    server = get_server("transform-node", client_type="vue3")
+    with DivLayout(server):
+        yield
 
 
 @pytest.fixture
 def gaussian():
-    description = json.loads((BUILTIN / "GaussianFilter.json").read_text())
-    return description, BUILTIN / "GaussianFilter.py"
+    description = json.loads((KERNELS / "GaussianFilter.json").read_text())
+    return description, KERNELS / "GaussianFilter.py"
 
 
 class ConstantSource(SourceNode):
@@ -94,6 +105,34 @@ def test_parameterless_description_still_makes_a_model():
     model = to_parameters_model(None, {"name": "NoParams", "parameters": []})
     assert set() == model.FIELD_NAMES
     assert "<v-" in model.generate_gui()  # an empty column, no controls
+
+
+def test_dataset_parameters_are_ports_not_controls():
+    from tomviz_web.app.parameters_gui import to_parameters_model
+
+    description = {
+        "name": "TwoInputs",
+        "parameters": [
+            {"name": "second_dataset", "label": "Second", "type": "dataset"},
+            {"name": "weight", "type": "double", "default": 0.5},
+        ],
+    }
+    model = to_parameters_model(None, description)
+    assert {"weight"} == model.FIELD_NAMES
+    assert "second_dataset" not in model.generate_gui()
+
+    node = build_transform_node(description, KERNELS / "CombineDatasets.py")
+    assert [port.name for port in node.input_ports()] == [INPUT_PORT, "second_dataset"]
+    assert "second_dataset" not in node.parameters
+
+
+@pytest.mark.parametrize("name", tomviz_kernels.names())
+def test_every_kernel_makes_a_parameters_model(name):
+    from tomviz_web.app.parameters_gui import to_parameters_model
+
+    description = json.loads((KERNELS / f"{name}.json").read_text())
+    model = to_parameters_model(None, description)
+    assert "<v-" in model.generate_gui()
 
 
 def test_parameter_edits_are_staged_until_applied(gaussian):

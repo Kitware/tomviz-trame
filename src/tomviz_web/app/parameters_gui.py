@@ -177,30 +177,16 @@ def gui_string(parameter):
 
 
 def gui_scalars(parameter):
-    logger.critical("Need to implement GUI for select_scalars: {}", parameter)
+    # No array picker yet: the kernel runs with its own default, usually the
+    # active scalars (see to_param).
+    logger.debug("No GUI for select_scalars yet: {}", parameter.get("name"))
     return False
 
 
-def gui_dataset(parameter):
-    name = parameter.get("name")
-    label = parameter.get("label", name)
-
-    if name is None:
-        logger.warning("Parameter {} has no name. Skipping.", parameter)
-        return False
-
-    return v3.VSelect(
-        label=label,
-        v_model=f"self.{name}",
-        items=("self.dataset_items",),
-        variant="outlined",
-        hide_details=True,
-        density="compact",
-        classes="my-2",
-    ).html
-
-
 PATH_TYPES = {"file", "save_file", "directory"}
+# Types without an entry have no control and no field. "dataset" is one on
+# purpose: like in the desktop app, such a parameter is an input port of the
+# node (LegacyPythonTransform adds it), linked in the pipeline.
 TYPE_MAPPING = {
     "bool": gui_bool,
     "int": gui_number,
@@ -211,8 +197,7 @@ TYPE_MAPPING = {
     "save_file": gui_string,
     "directory": gui_string,
     "string": gui_string,
-    "dataset": gui_dataset,  # can't find example
-    "select_scalars": gui_scalars,  # can't find example
+    "select_scalars": gui_scalars,  # RemoveArrays, PowerSpectrumDensity, ...
     # finding: reconstruction / label_map / table
 }
 
@@ -236,7 +221,6 @@ def to_param(name, param):
     name = param.get("name")
     param_type = param.get("type")
     param_default = param.get("default")
-    add_on_fields = {}
 
     if name is None:
         return {}
@@ -254,11 +238,12 @@ def to_param(name, param):
         core_py_type = int
     elif param_type == "xyz_header":
         return {}
+    elif param_type == "select_scalars":
+        # No array picker yet (gui_scalars): leave it out, so the kernel
+        # falls back to its own default, usually the active scalars.
+        return {}
     elif param_type in PATH_TYPES or param_type == "string":
         core_py_type = str
-    elif param_type == "dataset":
-        core_py_type = int
-        add_on_fields["dataset_items"] = dataclass.Sync(list, list)
 
     if core_py_type is None:
         msg = f"Invalid parameter type::{param_type} for {name}::{param.get('name')}"
@@ -272,7 +257,7 @@ def to_param(name, param):
         py_default = list(py_default)
         add_on["client_deep_reactive"] = True
 
-    return {name: dataclass.Sync(py_type, py_default, **add_on), **add_on_fields}
+    return {name: dataclass.Sync(py_type, py_default, **add_on)}
 
 
 def parameters_model_class(meta):

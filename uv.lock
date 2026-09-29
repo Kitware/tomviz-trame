@@ -2146,6 +2146,15 @@ wheels = [
 ]
 
 [[package]]
+name = "tomviz-kernels"
+version = "3.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/98/27/6471f57808c4bf0206fb1b27256f8e26d6f02505be043d0667798c885a08/tomviz_kernels-3.2.0.tar.gz", hash = "sha256:905acf7f5f990d8e88be476002dd19799889893edbfb50e15c1e8a19e51b36b6", size = 111283, upload-time = "2026-09-28T22:53:30.245Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/38/81d71a77466fd4ed2a4882ccb17a9f9a3d9d5bf201b14e8942947f4103bb/tomviz_kernels-3.2.0-py3-none-any.whl", hash = "sha256:b6d5b271a839103e61458855f8d1a8d0f9665fa11e912d199c931b3bbd9568ee", size = 174901, upload-time = "2026-09-28T22:53:28.952Z" },
+]
+
+[[package]]
 name = "tomviz-pipeline"
 version = "3.1.6"
 source = { registry = "https://pypi.org/simple" }
@@ -2169,6 +2178,7 @@ dependencies = [
     { name = "loguru" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "scipy", version = "1.18.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "tomviz-kernels" },
     { name = "tomviz-pipeline" },
     { name = "trame" },
     { name = "trame-color-opacity-editor" },
@@ -2202,6 +2212,7 @@ requires-dist = [
     { name = "pywebview", marker = "extra == 'app'" },
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "scipy", specifier = ">=1.17.1" },
+    { name = "tomviz-kernels", specifier = ">=3.2.0" },
     { name = "tomviz-pipeline", specifier = ">=3.1.6" },
     { name = "trame", specifier = ">=3.12" },
     { name = "trame-color-opacity-editor" },
