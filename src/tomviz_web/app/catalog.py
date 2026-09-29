@@ -4,9 +4,10 @@ Each entry is a JSON description plus a Python script, found by scanning
 directories: the upstream ``Name.json`` + ``Name.py`` sidecar pairs, or a
 single ``name.py`` exposing a module-level ``JSON`` dict. The builtin
 entries come from the ``tomviz_kernels`` package, shared with the desktop
-app. Only transforms (the desktop app calls them operators) are offered for
-now: schema-v2 source kernels are registered but kept out of the tree until
-the app can add a source.
+app. Most are transforms (the desktop app calls them operators); schema-v2
+kernels without inputs are sources, which start a pipeline. Sources that
+declare ``autoExecute`` (a live acquisition re-run on a timer) are
+registered but kept out of the tree: the app has no periodic execution yet.
 
 Configuration lives in ``~/.tomviz/catalog.json`` (or ``--catalog``): the
 directories and Python modules to scan, and the user's favorites. The
@@ -106,6 +107,12 @@ class CatalogEntry:
         """A schema-v2 kernel without inputs: it starts a pipeline instead of
         transforming data."""
         return self.json.get("schemaVersion") == 2 and not self.json.get("inputs")
+
+    @property
+    def auto_executes(self):
+        """The kernel asks to be re-run on a timer (``autoExecute``, e.g. a
+        live acquisition polling an instrument)."""
+        return bool((self.json.get("autoExecute") or {}).get("enabled"))
 
     def to_item(self, server, favorites):
         return data_model.CatalogItem(
@@ -326,8 +333,11 @@ class Catalog(TrameComponent):
         self.root.children = []
         tree_index = {}
         for entry in self.entries.values():
-            if entry.is_source:
-                logger.debug("Catalog source {} is not offered yet", entry.name)
+            if entry.auto_executes:
+                logger.debug(
+                    "Catalog entry {} needs periodic execution, not offered yet",
+                    entry.name,
+                )
                 continue
             item = entry.to_item(self.server, self.favorites)
             current_container = self.root

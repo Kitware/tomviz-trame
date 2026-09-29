@@ -10,12 +10,16 @@ from tomviz_web.app import data_model
 
 class TransformSelection(html.Div):
     """The picker that appends a catalog transform to the active data node's
-    chain. Shown in the drawer while ``select_transform`` is set."""
+    chain, or starts a pipeline with a catalog source. Shown in the drawer
+    while ``select_transform`` is set, with or without data: before any data
+    is loaded, only a source can be added."""
 
     def __init__(self):
         super().__init__()
 
         self.state.setdefault("transform_favorites", False)
+        # The activated item is a source (addable without a tip port).
+        self.state.setdefault("transform_activated_source", False)
 
         with self:
             v3.VBtn(
@@ -28,7 +32,12 @@ class TransformSelection(html.Div):
             )
 
             with (
-                dataclass.Provider(name="active_input", instance=("active_data_id",)),
+                # always: the picker shows without an active data node too
+                # (nothing loaded yet, or a link selected); the provider
+                # would otherwise render none of its content.
+                dataclass.Provider(
+                    name="active_input", instance=("active_data_id",), always=True
+                ),
                 v3.VCard(
                     classes="border-thin overflow-auto flex-fill mb-2",
                     flat=True,
@@ -37,7 +46,13 @@ class TransformSelection(html.Div):
             ):
                 v3.VLabel(
                     "{{ active_input.label }}",
+                    v_if="active_input_available",
                     classes="text-subtitle-2 text-truncate mx-2 mt-2",
+                )
+                v3.VLabel(
+                    "No data loaded: add a source, or open a file first",
+                    v_else_if="!tip_port_id",
+                    classes="text-caption text-wrap mx-2 mt-2",
                 )
                 with html.Div(classes="d-flex pa-2 ga-2 align-center"):
                     v3.VTextField(
@@ -50,14 +65,18 @@ class TransformSelection(html.Div):
                         clearable=True,
                     )
                     v3.VBtn(
-                        disabled=("transform_activated.length === 0",),
+                        # A transform needs a tip port to attach to.
+                        disabled=(
+                            "transform_activated.length === 0"
+                            " || (!tip_port_id && !transform_activated_source)",
+                        ),
                         classes="rounded",
                         icon="mdi-plus",
                         color="primary",
                         density="comfortable",
                         flat=True,
                         click=(
-                            self.add_transform,
+                            self.add_entry,
                             "[transform_activated[0]]",
                         ),
                     )
@@ -124,13 +143,23 @@ class TransformSelection(html.Div):
                             v_on_click_prevent="item.favorite = !item.favorite",
                         )
 
-    def add_transform(self, item_id):
+    def add_entry(self, item_id):
+        """Add the catalog item: a source starts a new pipeline, a transform
+        goes at the tip."""
         item = data_model.get_instance(item_id)
-        self.ctx.pipeline.add_transform(item.name, icon=item.icon, meta=item.meta)
+        entry = self.ctx.catalog.entries.get(item.name)
+        if entry is not None and entry.is_source:
+            self.ctx.pipeline.add_source(item.name, icon=item.icon, meta=item.meta)
+        else:
+            self.ctx.pipeline.add_transform(item.name, icon=item.icon, meta=item.meta)
 
     @change("transform_activated")
     def _on_active(self, transform_activated, **_):
+        source = False
         if transform_activated:
             item = data_model.get_instance(transform_activated[0])
             if isinstance(item, data_model.CatalogItem):
                 logger.debug("Catalog entry:\n{}", json.dumps(item.meta, indent=2))
+                entry = self.ctx.catalog.entries.get(item.name)
+                source = entry is not None and entry.is_source
+        self.state.transform_activated_source = source

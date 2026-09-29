@@ -5,6 +5,7 @@ from tomviz_pipeline.nodes import register_builtins
 
 from .reader import SUPPORTED_EXTENSIONS, ReaderSourceNode
 from .sinks import INPUT_PORT, RepresentationSinkNode
+from .sources import build_source_node
 from .transforms import build_transform_node
 
 
@@ -25,6 +26,7 @@ __all__ = [
     "SUPPORTED_EXTENSIONS",
     "ReaderSourceNode",
     "RepresentationSinkNode",
+    "build_source_node",
     "build_transform_node",
     "register_nodes",
 ]
