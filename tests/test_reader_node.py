@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 from tomviz_pipeline import NodeFactory, NodeState, Pipeline, PortData, SinkNode
 from tomviz_pipeline.dataset import Dataset
+from tomviz_pipeline.writers import write_emd
 from vtkmodules.vtkIOImage import vtkTIFFWriter
 
 from tomviz_web.app.pipeline.nodes import (
@@ -44,6 +45,29 @@ def test_reader_node_reads_tiff_through_vtk(tiff_volume):
     assert dataset.file_name == str(path)
     assert dataset.scalars_names == [dataset.active_name]
     np.testing.assert_array_equal(dataset.active_scalars, values)
+
+
+def test_reader_types_its_output_like_the_desktop(tiff_volume, tmp_path):
+    """A TiltSeries when the data has tilt angles, a Volume otherwise: never
+    plain ImageData, which kernels declaring a Volume input refuse."""
+    values = np.zeros((4, 4, 3), dtype=np.float32, order="F")
+    volume = tmp_path / "volume.emd"
+    write_emd(Dataset({"scalars": values}), volume)
+    tilt_series = Dataset({"scalars": values})
+    tilt_series.tilt_angles = np.array([-30.0, 0.0, 30.0])
+    tilt_series.tilt_axis = 2
+    write_emd(tilt_series, tmp_path / "tilt_series.emd")
+
+    for path, expected in (
+        (tiff_volume[0], "Volume"),  # read through VTK
+        (volume, "Volume"),  # read by the library
+        (tmp_path / "tilt_series.emd", "TiltSeries"),
+    ):
+        node = ReaderSourceNode.for_file(path)
+        assert node.execute() is True
+        port = node.output_port("volume")
+        assert port.port_type == expected, path.name
+        assert port.data().port_type == expected, path.name
 
 
 def test_reader_node_fails_cleanly_without_a_file(tmp_path):

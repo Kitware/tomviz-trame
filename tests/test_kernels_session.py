@@ -62,7 +62,8 @@ async def run_session(volume_file, other_file, tilt_series_file):
     try:
         manager.load_file(volume_file)
         await wait_idle(manager)
-        assert manager.tip_port.port_type == "ImageData"
+        # Like the desktop reader: no tilt angles, a Volume.
+        assert manager.tip_port.port_type == "Volume"
 
         # A v1 script, hosted by LegacyPythonTransform.
         blur = data_model.get_instance(
@@ -115,13 +116,19 @@ async def run_session(volume_file, other_file, tilt_series_file):
         combined = combine.node.output_ports()[0].data().payload
         assert combined.scalars_names == ["scalars", "other"]
 
-        # Tilt series kernels refuse a plain volume...
+        # Kernels that declare a Volume input take a loaded file...
+        assert app.ctx.catalog.entries["ClipEdges"].json["inputType"] == "Volume"
+        clip = data_model.get_instance(manager.add_transform("ClipEdges"))
+        await wait_idle(manager)
+        assert clip.state == "Current"
+
+        # ...tilt series kernels refuse it...
         assert app.ctx.catalog.entries["ReconstructWBP"].json["inputType"] == (
             "TiltSeries"
         )
         assert manager.add_transform("ReconstructWBP") is None
 
-        # ...and take a dataset that has tilt angles.
+        # ...and take a file that has tilt angles.
         manager.load_file(tilt_series_file)
         await wait_idle(manager)
         assert manager.tip_port.port_type == "TiltSeries"
