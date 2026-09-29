@@ -31,7 +31,10 @@ class ReaderSourceNode(_ReaderSourceNode):
     ``readerOptions``) and serialization, so a state file written here loads
     in the desktop tomviz and vice versa. Only ``execute`` differs: files with
     a VTK reader are read through it and converted to a numpy Dataset, the
-    rest go through the library's own readers.
+    rest go through the library's own readers. Either way the output is typed
+    like the desktop reader types it: ``TiltSeries`` when the data has tilt
+    angles, ``Volume`` otherwise, never plain ``ImageData`` (which kernels
+    declaring a ``Volume`` input refuse).
     """
 
     @classmethod
@@ -62,7 +65,11 @@ class ReaderSourceNode(_ReaderSourceNode):
 
         reader_class = VTK_READERS.get(file_path.suffix.lower())
         if reader_class is None:
-            return super().execute()
+            if not super().execute():
+                return False
+            # The library leaves data without tilt angles as ImageData.
+            self._set_output(self.output_port(OUTPUT_PORT).data().payload)
+            return True
 
         if not file_path.exists():
             logger.error("File not found: {}", file_path)
@@ -72,7 +79,10 @@ class ReaderSourceNode(_ReaderSourceNode):
         reader.Update()
         dataset = convert.from_vtk_image(reader.GetOutputDataObject(0))
         dataset.file_name = str(file_path)
-
-        port = self.output_port(OUTPUT_PORT)
-        port.set_data(PortData(dataset, port.port_type))
+        self._set_output(dataset)
         return True
+
+    def _set_output(self, dataset):
+        port = self.output_port(OUTPUT_PORT)
+        port.port_type = "TiltSeries" if dataset.tilt_angles is not None else "Volume"
+        port.set_data(PortData(dataset, port.port_type))

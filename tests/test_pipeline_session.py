@@ -156,8 +156,10 @@ async def run_session(tiff):
             port.payload.active_scalars + 3,
         )
 
-        # ---- effective types follow the upstream port, models included
-        assert transform.outputs[0].port_type == "ImageData"
+        # ---- effective types follow the upstream port, models included (the
+        # reader types a file without tilt angles as a Volume)
+        assert port.port_type == "Volume"
+        assert transform.outputs[0].port_type == "Volume"
         port.port.port_type = "TiltSeries"  # what the reader does for a stack
         await settle()
         assert transform.outputs[0].port.port_type == "TiltSeries"
