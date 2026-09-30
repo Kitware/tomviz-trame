@@ -81,7 +81,10 @@ class NodeModel(StateDataModel):
         self.progress_message = node.progress_message()
 
         # Instance values
-        if isinstance(self.node, TransformNode):
+        if isinstance(self.node, TransformNode) and hasattr(self.node, "_script"):
+            # FIXME Alessandro - What should be the logic here?
+            # - https://github.com/OpenChemistry/tomviz-pipeline/blob/main/src/tomviz_pipeline/nodes/transforms/python_transform.py#L50
+            # - https://github.com/OpenChemistry/tomviz-pipeline/blob/main/src/tomviz_pipeline/nodes/transforms/legacy_python.py#L92
             self.script = self.node._script
             self.definition = json.loads(self.node._json_description) or {}
 
