@@ -11,7 +11,10 @@ and transforms); what the UI shows about the data itself lives on their
 
 from __future__ import annotations
 
+import json
+
 from tomviz_pipeline import Node, OutputPort
+from tomviz_pipeline.core import TransformNode
 from trame.app.dataclass import ServerOnly, StateDataModel, Sync
 
 
@@ -57,6 +60,9 @@ class NodeModel(StateDataModel):
     inputs = Sync(list, list, has_dataclass=True)  # [InputPortModel]
     outputs = Sync(list, list, has_dataclass=True)  # [OutputPortModel]
 
+    script = Sync(str, "")
+    definition = Sync(dict, dict, client_deep_reactive=True)
+
     def pull_state(self):
         """Copy the node's identity, state and progress into the synced
         fields (event loop only)."""
@@ -73,6 +79,22 @@ class NodeModel(StateDataModel):
         self.progress_step = node.progress_step()
         self.progress_maximum = node.total_progress_steps()
         self.progress_message = node.progress_message()
+
+        # Instance values
+        if isinstance(self.node, TransformNode):
+            self.script = self.node._script
+            self.definition = json.loads(self.node._json_description) or {}
+
+    def save_to_node(self):
+        """Save edits to node"""
+        node = self.node
+        if node is None:
+            return
+
+        node.label = self.label
+        node._script = self.script
+        node._json_description = json.dumps(self.definition)
+        # FIXME Alessandro - trigger something on node to process edit ?
 
     def output_model(self, port: OutputPort):
         """The ``OutputPortModel`` mirroring ``port``, or None."""

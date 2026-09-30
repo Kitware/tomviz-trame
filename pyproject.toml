@@ -18,6 +18,7 @@ dependencies = [
     "tomviz-pipeline>=3.1.6",
     "tomviz-kernels>=3.2.0",
     "scipy>=1.17.1",
+    "trame-code>=1.1.1",
 ]
 requires-python = ">=3.11"
 readme = "README.md"

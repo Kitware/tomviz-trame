@@ -2181,6 +2181,7 @@ dependencies = [
     { name = "tomviz-kernels" },
     { name = "tomviz-pipeline" },
     { name = "trame" },
+    { name = "trame-code" },
     { name = "trame-color-opacity-editor" },
     { name = "trame-colormaps" },
     { name = "trame-dataclass" },
@@ -2215,6 +2216,7 @@ requires-dist = [
     { name = "tomviz-kernels", specifier = ">=3.2.0" },
     { name = "tomviz-pipeline", specifier = ">=3.1.6" },
     { name = "trame", specifier = ">=4" },
+    { name = "trame-code", specifier = ">=1.1.1" },
     { name = "trame-color-opacity-editor" },
     { name = "trame-colormaps", specifier = ">=1.7.2" },
     { name = "trame-dataclass", specifier = ">=2.2.1" },
@@ -2263,6 +2265,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/9f/6f/46c06cb49b8773589a69b968529be57b1bc35cbec03be6b8cee7c994bc6f/trame_client-4.1.2.tar.gz", hash = "sha256:e2f50ef7b29f65daf4edcfb6b51ba3b931c0f0de3a60527a48277bbc797d46fe", size = 552422, upload-time = "2026-09-22T21:11:38.441Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/ae/6f/78a6f0255f63dce34576193f965dc8eae26b37c68432041d61f04bd78e3d/trame_client-4.1.2-py3-none-any.whl", hash = "sha256:856960ebca665e097127c78cfdc508ca38bb73f09265a2ee43583b54cb651e3c", size = 567607, upload-time = "2026-09-22T21:11:36.93Z" },
+]
+
+[[package]]
+name = "trame-code"
+version = "1.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "trame-client" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/34/dd/8830c0fd876cf7cda57ee64bf71362b7280f0afe615a8942c130acaf46d4/trame_code-1.1.1.tar.gz", hash = "sha256:05eeb5b8fc773217dd1ac68aeaf2d4bcc30f1d21f15aa3eaac9fa817c1cfe9b2", size = 3793250, upload-time = "2026-06-17T15:26:44.454Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/aa/25/0fc197dacb095eb088693c6c303b1aaf9a93f5a4428347e69a125638837d/trame_code-1.1.1-py3-none-any.whl", hash = "sha256:c67bd087a7057f14e43a539a5c2064db7f5a69a6f8143df1ab0507ec5e001777", size = 3590425, upload-time = "2026-06-17T15:26:42.709Z" },
 ]
 
 [[package]]
