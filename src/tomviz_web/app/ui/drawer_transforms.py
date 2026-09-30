@@ -151,7 +151,11 @@ class TransformSelection(html.Div):
         if entry is not None and entry.is_source:
             self.ctx.pipeline.add_source(item.name, icon=item.icon, meta=item.meta)
         else:
-            self.ctx.pipeline.add_transform(item.name, icon=item.icon, meta=item.meta)
+            transform_id = self.ctx.pipeline.add_transform(
+                item.name, icon=item.icon, meta=item.meta
+            )
+            self.state.select_transform = False
+            self.ctrl.open_transform_editor(transform_id)
 
     @change("transform_activated")
     def _on_active(self, transform_activated, **_):
