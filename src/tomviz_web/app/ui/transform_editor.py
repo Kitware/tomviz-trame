@@ -1,8 +1,12 @@
 """Dialog configuring a catalog node (a transform, or a catalog source): its
-label, its definition (the entry's JSON description), its script and its
-parameters. Definition and script edits are staged in the dialog's
-``TransformEditorModel``; the label and the parameters (Apply) reach the
-node directly."""
+name, its definition (the entry's JSON description), its script and its
+parameters. Every edit is staged until Apply or OK, which commit them all
+and re-execute the graph once; Cancel (or the close button) drops them,
+including the parameter panel's. For a node the manager holds until it is
+confirmed (a new transform), Apply/OK also release it and Cancel removes it,
+restoring the graph (see ``PipelineManager.is_pending``)."""
+
+import copy
 
 from loguru import logger
 from trame.app.dataclass import StateDataModel, Sync, get_instance
@@ -11,7 +15,9 @@ from trame.widgets import vuetify3 as v3
 
 from tomviz_web.app.data_model import DataNodeModel
 
-# Parameter types the definition editor offers (the desktop app's list).
+# Parameter types the definition editor offers (the desktop app's list, but
+# "dataset": in a v1 definition such a parameter is an input port of the
+# node, and a node's ports are fixed once it exists).
 PARAMETER_TYPES = [
     "double",
     "int",
@@ -23,19 +29,25 @@ PARAMETER_TYPES = [
     "directory",
     "select_scalars",
     "xyz_header",
-    "dataset",
 ]
 NUMBER_TYPES = "['int', 'double']"
 TEXT_TYPES = "['string', 'file', 'save_file', 'directory']"
 
 
 class TransformEditorModel(StateDataModel):
-    """What the dialog edits. ``definition`` is deep reactive, so the
-    client's nested edits (a parameter's fields) reach the server."""
+    """The dialog's own state: which node it configures, the staged name,
+    definition and script, and the outcome of the last Apply (``message``,
+    a ``v-alert`` type). ``definition`` is deep reactive, so the client's
+    nested edits (a parameter's fields) reach the server."""
 
     show = Sync(bool, False)
     tab = Sync(str, "parameters")
     transform_id = Sync(str, "")  # the DataNodeModel being configured
+    label = Sync(str, "")
+    definition = Sync(dict, dict, client_deep_reactive=True)
+    script = Sync(str, "")
+    message = Sync(str, "")
+    message_type = Sync(str, "info")
 
 
 def json_field(label, key, **kwargs):
@@ -67,11 +79,14 @@ class TransformEditorDialog(html.Div):
         super().__init__()
         self.editor = TransformEditorModel(self.server)
         self.ctrl.open_transform_editor = self.open
+        self.ctx.transform_editor = self
 
         with (
             self,
             self.editor.provide_as("editor"),
-            v3.VDialog(v_model="editor.show", contained=True),
+            # Persistent: only Cancel, the close button and OK close it, so
+            # a stray click outside cannot drop the edits.
+            v3.VDialog(v_model="editor.show", contained=True, persistent=True),
             dataclass.Provider(name="transform", instance=("editor.transform_id",)),
         ):
             with v3.VCard(
@@ -81,20 +96,19 @@ class TransformEditorDialog(html.Div):
                 max_width="1000px",
                 width="80vw",
             ):
-                with v3.VCardItem(title=("`Configure - ${transform.label}`",)):
+                with v3.VCardItem(title=("`Configure - ${editor.label}`",)):
                     with v3.Template(v_slot_append=True):
                         v3.VBtn(
                             icon="mdi-close",
                             density="compact",
                             variant="plain",
-                            click="editor.show = false",
+                            click=self.cancel,
                         )
                 v3.VDivider()
                 with v3.VCardText(classes="flex-0-0 pb-0"):
                     v3.VTextField(
                         label="Name",
-                        model_value=("transform.label",),
-                        update_modelValue=(self.rename, "[transform._id, $event]"),
+                        v_model="editor.label",
                         variant="outlined",
                         density="compact",
                         hide_details=True,
@@ -109,6 +123,16 @@ class TransformEditorDialog(html.Div):
                     v3.VTab("Parameters", value="parameters", classes="text-none")
                     v3.VTab("Execution", value="execution", classes="text-none")
                 v3.VDivider()
+                v3.VAlert(
+                    v_if="editor.message",
+                    text=("editor.message",),
+                    type=("editor.message_type",),
+                    density="compact",
+                    variant="tonal",
+                    closable=True,
+                    click_close="editor.message = ''",
+                    classes="flex-0-0 mx-4 mt-2",
+                )
                 with v3.VTabsWindow(
                     v_model="editor.tab",
                     classes="flex-fill overflow-auto",
@@ -118,7 +142,7 @@ class TransformEditorDialog(html.Div):
 
                     with v3.VTabsWindowItem(value="script", classes="h-100"):
                         code.Editor(
-                            v_model="transform.script",
+                            v_model="editor.script",
                             language="python",
                             theme=("theme === 'light' ? 'vs' : 'vs-dark'",),
                             options=(
@@ -130,13 +154,27 @@ class TransformEditorDialog(html.Div):
                     with v3.VTabsWindowItem(value="parameters", classes="pa-4"):
                         self._parameters()
                     v3.VTabsWindowItem(value="execution", classes="pa-4")
+                v3.VDivider()
+                with v3.VCardActions(classes="flex-0-0 px-4"):
+                    v3.VSpacer()
+                    v3.VBtn("Cancel", classes="text-none", click=self.cancel)
+                    v3.VBtn(
+                        "Apply", classes="text-none", variant="tonal", click=self.apply
+                    )
+                    v3.VBtn(
+                        "OK",
+                        classes="text-none",
+                        variant="flat",
+                        color="primary",
+                        click=self.ok,
+                    )
 
     def _definition(self):
         with v3.VRow(dense=True):
             with v3.VCol(cols=6):
                 v3.VTextField(
                     label="Name",
-                    v_model="transform.definition.name",
+                    v_model="editor.definition.name",
                     variant="outlined",
                     density="compact",
                     hide_details=True,
@@ -144,7 +182,7 @@ class TransformEditorDialog(html.Div):
             with v3.VCol(cols=6):
                 v3.VTextField(
                     label="Label",
-                    v_model="transform.definition.label",
+                    v_model="editor.definition.label",
                     variant="outlined",
                     density="compact",
                     hide_details=True,
@@ -152,7 +190,7 @@ class TransformEditorDialog(html.Div):
             with v3.VCol(cols=12):
                 v3.VTextarea(
                     label="Description",
-                    v_model="transform.definition.description",
+                    v_model="editor.definition.description",
                     variant="outlined",
                     density="compact",
                     hide_details=True,
@@ -170,26 +208,21 @@ class TransformEditorDialog(html.Div):
                 density="compact",
                 variant="tonal",
                 click=(
-                    "transform.definition.parameters = [...(transform.definition.parameters || []), "
-                    "{ name: `param_${(transform.definition.parameters || []).length}`, "
+                    "editor.definition.parameters = [...(editor.definition.parameters || []), "
+                    "{ name: `param_${(editor.definition.parameters || []).length}`, "
                     "type: 'double', default: 0 }]"
                 ),
-            )
-            v3.VBtn(
-                "Apply Edits",
-                prepend_icon="mdi-content-save-outline",
-                classes="text-none ml-4",
-                density="compact",
-                variant="tonal",
-                click=(self.save, "[transform._id]"),
             )
 
         with v3.VExpansionPanels(
             variant="accordion", multiple=True, flat=True, rounded=True, static=True
         ):
+            # dataset parameters are ports, not values: hidden, and kept as
+            # they are (``idx`` still indexes the whole list).
             with v3.VExpansionPanel(
-                v_for="(param, idx) in (transform.definition.parameters || [])",
+                v_for="(param, idx) in (editor.definition.parameters || [])",
                 key="idx",
+                v_show="param.type !== 'dataset'",
                 rounded=True,
                 classes="border-thin my-1",
             ):
@@ -205,7 +238,7 @@ class TransformEditorDialog(html.Div):
                         density="compact",
                         variant="plain",
                         classes="mr-2",
-                        click_stop="transform.definition.parameters.splice(idx, 1)",
+                        click_stop="editor.definition.parameters.splice(idx, 1)",
                     )
                 with v3.VExpansionPanelText(classes="border-t-thin pt-3"):
                     with v3.VRow(dense=True):
@@ -263,7 +296,7 @@ class TransformEditorDialog(html.Div):
                             )
                         with v3.VCol(
                             cols=12,
-                            v_else_if="!['xyz_header', 'dataset', 'select_scalars'].includes(param.type)",
+                            v_else_if="!['xyz_header', 'select_scalars'].includes(param.type)",
                         ):
                             json_field(
                                 "Default (JSON)",
@@ -292,61 +325,79 @@ class TransformEditorDialog(html.Div):
 
     def _parameters(self):
         html.Div(
-            "{{ transform.definition.description }}",
-            v_if="transform?.definition?.description",
+            "{{ editor.definition.description }}",
+            v_if="editor.definition.description",
             classes="text-body-2 mb-4",
             style="white-space: pre-wrap;",
         )
-        dataclass.Gui(instance=("transform.parameters._id",))
-        with html.Div(classes="d-flex ga-2 mt-1"):
-            v3.VSpacer()
-            v3.VBtn(
-                "Reset",
-                classes="text-none",
-                density="compact",
-                variant="text",
-                disabled=("!transform.parameters_dirty",),
-                click=(self.reset, "[transform._id]"),
-            )
-            v3.VBtn(
-                "Apply",
-                classes="text-none",
-                density="compact",
-                variant="tonal",
-                color="primary",
-                disabled=("!transform.parameters_dirty",),
-                click=(self.apply, "[transform._id]"),
-            )
+        # Optional chaining: a canceled insertion removes the node this
+        # still points at.
+        dataclass.Gui(instance=("transform?.parameters?._id",))
 
     def open(self, model_id):
-        """Show the dialog for the catalog node model ``model_id``, loading
-        its entry's description and script."""
+        """Show the dialog for the catalog node model ``model_id``, staging
+        a copy of the node's name, definition and script."""
         model = get_instance(model_id)
         if not isinstance(model, DataNodeModel) or model.parameters is None:
             logger.warning("No catalog node to configure: {}", model_id)
             return
 
+        model.pull_definition()
         self.editor.transform_id = model._id
+        self.editor.label = model.label
+        self.editor.definition = copy.deepcopy(model.definition)
+        self.editor.script = model.node.script
+        self.editor.message = ""
         self.editor.show = True
 
-    def rename(self, model_id, label):
-        model = get_instance(model_id)
-        model.label = label
-        model.definition = {**model.definition, "label": label}
-        # model.dirty("definition")
-        model.save_to_node()
-
-    def save(self, model_id):
-        model = get_instance(model_id)
-        model.label = model.definition.get("label", model.label)
-        model.save_to_node()
-
-    def apply(self, model_id):
-        model = get_instance(model_id)
-        if model is not None:
-            model.apply_parameters()
-
-    def reset(self, model_id):
-        model = get_instance(model_id)
+    def cancel(self):
+        """Close, dropping the staged edits and the panel's; a node still
+        waiting for confirmation is removed."""
+        model = get_instance(self.editor.transform_id)
         if model is not None:
             model.reset_parameters()
+            self.ctx.pipeline.cancel_pending(model._id)
+        self.editor.show = False
+
+    def apply(self) -> bool:
+        """Commit every staged edit, then re-execute once. Returns whether
+        the edits were applied."""
+        model = get_instance(self.editor.transform_id)
+        if model is None or model.node is None:
+            return False
+        try:
+            # The definition and script first: they run nothing.
+            reset = model.apply_edits(
+                copy.deepcopy(self.editor.definition), self.editor.script
+            )
+        except ValueError as error:
+            self.editor.message_type = "error"
+            self.editor.message = f"Edits not applied: {error}."
+            return False
+
+        # The name only: the definition's label is the default name of
+        # new nodes (desktop parity).
+        model.node.label = self.editor.label
+        model.label = self.editor.label
+        self.ctx.pipeline.commit_pending(model._id)
+
+        # The panel's values last: set_parameters re-executes the graph.
+        if not model.apply_parameters():
+            self.ctx.pipeline.execute()
+
+        if reset:
+            self.editor.message_type = "warning"
+            self.editor.message = (
+                "Edits applied. These parameters went back to their defaults: "
+                + ", ".join(reset)
+                + "."
+            )
+        else:
+            self.editor.message_type = "success"
+            self.editor.message = "Edits applied."
+        return True
+
+    def ok(self):
+        """Apply, and close unless the edits were refused."""
+        if self.apply():
+            self.editor.show = False
