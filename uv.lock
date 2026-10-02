@@ -2156,7 +2156,7 @@ wheels = [
 
 [[package]]
 name = "tomviz-pipeline"
-version = "3.1.6"
+version = "3.2.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -2165,9 +2165,9 @@ dependencies = [
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/87/96/f4ad8c51f710dd66fab3d09f00aab4ae25287e52a302df8c900dac4edcfd/tomviz_pipeline-3.1.6.tar.gz", hash = "sha256:4125e9e52094b1dbdbd52c7985a82e3111740e514a335519543dd97f1e0dd055", size = 165562, upload-time = "2026-09-09T23:39:25.37Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d2/5c/58ac86b78b026c6a172bfa34e21b5f9070835df5ee76b2398ff2324f17de/tomviz_pipeline-3.2.0.tar.gz", hash = "sha256:1eb3a92c77767d3209b6865edc6f2f7447282e19a19a278aa99150d12ddd1660", size = 173776, upload-time = "2026-10-02T20:24:03.856Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/12/a7/6734aad353e7430c7d3199f8c47dbdd2afa5ed9cbb92b679f28511ea534f/tomviz_pipeline-3.1.6-py3-none-any.whl", hash = "sha256:a001d93ba5b28c1c7c932cd07eed4300d5a29fca8b7ca76075743abc18de2eca", size = 138768, upload-time = "2026-09-09T23:39:23.828Z" },
+    { url = "https://files.pythonhosted.org/packages/2d/3e/51e14183e5b558303b241d226ad6fee6aba96c28ecdbdb8032dce8596e05/tomviz_pipeline-3.2.0-py3-none-any.whl", hash = "sha256:6c8b86f671ebdabfb197f88035616f9f8ab49a8cdef31f26898253099cd14cbb", size = 146227, upload-time = "2026-10-02T20:24:02.357Z" },
 ]
 
 [[package]]
@@ -2214,7 +2214,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "scipy", specifier = ">=1.17.1" },
     { name = "tomviz-kernels", specifier = ">=3.2.0" },
-    { name = "tomviz-pipeline", specifier = ">=3.1.6" },
+    { name = "tomviz-pipeline", specifier = ">=3.2.0" },
     { name = "trame", specifier = ">=4" },
     { name = "trame-code", specifier = ">=1.1.1" },
     { name = "trame-color-opacity-editor" },

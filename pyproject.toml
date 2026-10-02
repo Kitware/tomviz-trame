@@ -15,7 +15,7 @@ dependencies = [
     "trame-colormaps>=1.7.2",
     "loguru",
     "vtk>=9.7",
-    "tomviz-pipeline>=3.1.6",
+    "tomviz-pipeline>=3.2.0",
     "tomviz-kernels>=3.2.0",
     "scipy>=1.17.1",
     "trame-code>=1.1.1",
