@@ -117,7 +117,7 @@ version_variables = [
     "src/tomviz_web/__init__.py:__version__",
 ]
 
-build_command = "uv build"
+build_command = "python -m pip install uv && uv build"
 
 [tool.semantic_release.publish]
 dist_glob_patterns = ["dist/*"]
