@@ -1,6 +1,6 @@
 from trame.app.dataclass import get_instance
 from trame.ui.html import DivLayout
-from trame.widgets import dataclass, html
+from trame.widgets import client, dataclass, html
 from trame.widgets import vuetify3 as v3
 
 NAME = "transform"
@@ -9,7 +9,7 @@ TEMPLATE = "transform"
 
 class TransformUI(DivLayout):
     """Parameter panel of the active catalog node (a transform, or a source
-    built from the catalog): the generated GUI of its ``parameters`` model.
+    built from the catalog): the server template of its ``parameters``.
     Edits are staged in the mirror until Apply pushes them to the node
     (Reset drops them)."""
 
@@ -26,7 +26,11 @@ class TransformUI(DivLayout):
                 classes="text-body-2 mb-4",
                 style="white-space: pre-wrap;",
             )
-            dataclass.Gui(instance=("transform.parameters._id",))
+            # Guarded: without a name, the template shown is "main".
+            client.ServerTemplate(
+                v_if="transform.parameters?.template_name",
+                name=("transform.parameters.template_name",),
+            )
             with html.Div(classes="d-flex ga-2 mt-1"):
                 v3.VBtn(
                     "Configure",

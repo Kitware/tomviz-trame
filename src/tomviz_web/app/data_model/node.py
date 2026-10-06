@@ -17,19 +17,11 @@ from loguru import logger
 from tomviz_pipeline import Node, OutputPort, ScriptableNode
 from trame.app.dataclass import ServerOnly, StateDataModel, Sync
 
-from tomviz_web.app.parameters_gui import to_parameters_model
-
-
-def coerce_like(reference, value):
-    """``value`` as the numeric type of ``reference``: state files store
-    ``4`` for a double parameter whose field is a float."""
-    if (
-        isinstance(reference, float)
-        and isinstance(value, int)
-        and not isinstance(value, bool)
-    ):
-        return float(value)
-    return value
+from tomviz_web.app.parameters_gui import (
+    OperatorParameters,
+    coerce,
+    default_values,
+)
 
 
 class NodeModel(StateDataModel):
@@ -106,9 +98,9 @@ class DataNodeModel(NodeModel):
     """A node that produces data: sources and transforms. The first output
     is the primary one sinks and downstream nodes read by default.
 
-    A node built from a catalog entry (``entry_name``) has ``parameters``:
-    they mirror ``Node.parameters``, as the dataclass ``parameters_gui``
-    generates from the entry's JSON (one synced field per parameter).
+    A node built from a catalog entry (``entry_name``) has ``parameters``
+    (``parameters_gui.OperatorParameters``): its ``values`` mirror
+    ``Node.parameters`` and its server template is the panel editing them.
     ``bind_parameters`` copies the node's values into it and watches it:
     edits only mark the mirror ``parameters_dirty``; the panel's Apply button
     calls ``apply_parameters``, which pushes them with ``set_parameters``
@@ -118,11 +110,11 @@ class DataNodeModel(NodeModel):
     A scriptable node (``tomviz_pipeline.ScriptableNode``: every catalog
     node) also mirrors its ``definition`` (the JSON description).
     ``apply_edits`` replaces the node's definition and script, as the
-    transform editor's Apply does.
+    transform editor's Apply does, and updates ``parameters`` in place.
     """
 
     entry_name = Sync(str)
-    parameters = Sync(StateDataModel, has_dataclass=True)
+    parameters = Sync(OperatorParameters | None, None, has_dataclass=True)
     parameters_dirty = Sync(bool, False)  # the mirror differs from the node
     definition = Sync(dict, dict)
 
@@ -138,17 +130,13 @@ class DataNodeModel(NodeModel):
         if self.node is None or self.parameters is None:
             return
 
-        names = [n for n in self.node.parameters if hasattr(self.parameters, n)]
-        for name in names:
-            current = getattr(self.parameters, name)
-            setattr(
-                self.parameters, name, coerce_like(current, self.node.parameters[name])
-            )
+        names = [n for n in self.node.parameters if n in self.parameters.values]
+        self.parameters.set(**{name: self.node.parameters[name] for name in names})
 
         self._parameter_names = names
         if names:
             self._unwatch_parameters = self.parameters.watch(
-                names, self._on_parameters_change
+                ["values"], self._on_parameters_change
             )
 
     def unbind_parameters(self):
@@ -157,14 +145,22 @@ class DataNodeModel(NodeModel):
             self._unwatch_parameters = None
         self._parameter_names = []
 
+    def release_parameters(self):
+        """Unbind, and drop the panel's template: the node is gone."""
+        self.unbind_parameters()
+        if self.parameters is not None:
+            self.parameters.release()
+
     def _pending_parameters(self) -> dict:
-        """The mirror's values that differ from the node's."""
+        """The mirror's values that differ from the node's, as their
+        declared types (the client sends ``3`` for a double)."""
         if self.node is None or self.parameters is None:
             return {}
+        values = self.parameters.values
         return {
-            name: getattr(self.parameters, name)
+            name: coerce(self.parameters.parameter(name), values[name])
             for name in self._parameter_names
-            if self.node.parameter(name) != getattr(self.parameters, name)
+            if self.node.parameter(name) != values.get(name)
         }
 
     def _on_parameters_change(self, *_values):
@@ -186,11 +182,9 @@ class DataNodeModel(NodeModel):
         """Drop the edits: copy the node's values back into the mirror."""
         if self.node is None or self.parameters is None:
             return
-        for name in self._parameter_names:
-            current = getattr(self.parameters, name)
-            setattr(
-                self.parameters, name, coerce_like(current, self.node.parameters[name])
-            )
+        self.parameters.set(
+            **{name: self.node.parameters[name] for name in self._parameter_names}
+        )
         self.parameters_dirty = False
 
     def pull_definition(self):
@@ -205,33 +199,32 @@ class DataNodeModel(NodeModel):
             self.definition = {}
 
     def apply_edits(self, definition: dict, script: str) -> list[str]:
-        """Give the node a new ``definition`` and ``script``, and rebuild
-        ``parameters`` when the declared parameters changed; unapplied
-        panel values carry over to parameters that kept their type. Nothing
-        runs: the node is marked stale, and the caller applies the panel
-        (``apply_parameters``) or re-executes. Returns the names of the
-        parameters whose values went back to their defaults. Raises
-        ``ValueError``, leaving the node untouched, when the definition
-        cannot apply to an existing node (it changes the schema or ports)."""
+        """Give the node a new ``definition`` and ``script``, and update
+        ``parameters`` (values and panel) when the declared parameters
+        changed; unapplied panel values carry over to parameters that kept
+        their type. Nothing runs: the node is marked stale, and the caller
+        applies the panel (``apply_parameters``) or re-executes. Returns the
+        names of the parameters whose values went back to their defaults.
+        Raises ``ValueError``, leaving the node untouched, when the
+        definition cannot apply to an existing node (it changes the schema or
+        ports)."""
         node = self.node
         if not isinstance(node, ScriptableNode):
             return []
         current = json.loads(node.json_description or "{}")
+        parameters = definition.get("parameters") or []
+        changed = self.parameters is not None and parameters != (
+            current.get("parameters") or []
+        )
 
-        # Build the new panel first: an unusable parameter type raises
-        # before the node changes.
-        parameters = None
-        if (definition.get("name"), definition.get("parameters")) != (
-            current.get("name"),
-            current.get("parameters"),
-        ):
-            parameters = to_parameters_model(
-                self.server,
-                {
-                    "name": definition.get("name") or self.entry_name or "Parameters",
-                    "parameters": definition.get("parameters") or [],
-                },
-            )
+        # Check the new defaults first: an unusable one raises before the
+        # node changes.
+        if changed:
+            try:
+                default_values(parameters)
+            except (TypeError, ValueError) as error:
+                msg = f"invalid parameter default ({error})"
+                raise ValueError(msg) from error
 
         reset = []
         if definition != current:
@@ -240,15 +233,19 @@ class DataNodeModel(NodeModel):
             node.script = script
         self.definition = definition
 
-        if parameters is not None:
+        if changed:
             pending = self._pending_parameters()
             before, after = _parameter_types(current), _parameter_types(definition)
             self.unbind_parameters()
-            self.parameters = parameters
+            self.parameters.set_definition(parameters)
             self.bind_parameters()
-            for name, value in pending.items():
-                if name in self._parameter_names and before[name] == after[name]:
-                    setattr(self.parameters, name, value)
+            self.parameters.set(
+                **{
+                    name: value
+                    for name, value in pending.items()
+                    if name in self._parameter_names and before[name] == after[name]
+                }
+            )
             self.parameters_dirty = bool(self._pending_parameters())
         return reset
 

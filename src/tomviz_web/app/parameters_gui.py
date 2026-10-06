@@ -1,18 +1,14 @@
-"""Parameter models and panels generated from a catalog entry's JSON
-``parameters`` list: one ``StateDataModel`` subclass per entry name and
-parameter list (one synced field per parameter) and the Vuetify HTML that
-edits it."""
+"""Parameter panels generated from a catalog entry's JSON ``parameters``
+list. ``OperatorParameters`` holds the definition and one value per
+parameter; the Vuetify HTML editing them is a server template
+(``trame__template_operator_<n>``) recomputed whenever the definition
+changes, so the panel follows the transform editor's edits."""
 
-import json
+import itertools
 
 from loguru import logger
-from trame.app import dataclass
+from trame.app.dataclass import StateDataModel, Sync
 from trame.widgets import vuetify3 as v3
-
-# (entry name, parameters as JSON) -> generated class. The parameters are
-# part of the key: a definition edited in the transform editor declares
-# other fields under the same name.
-PARAMETERS_MODEL_CLASSES = {}
 
 
 def gui_bool(parameter):
@@ -25,7 +21,7 @@ def gui_bool(parameter):
 
     return v3.VSwitch(
         label=label,
-        v_model=f"self.{name}",
+        v_model=f"self.values['{name}']",
         hide_details=True,
     ).html
 
@@ -89,7 +85,7 @@ def gui_number(parameter):
     if size == 1:
         with v3.VNumberInput(
             label=label,
-            v_model=f"self.{name}",
+            v_model=f"self.values['{name}']",
             control_variant="stacked",
             variant="outlined",
             density="compact",
@@ -114,7 +110,7 @@ def gui_number(parameter):
             for i in range(size):
                 with v3.VCol():
                     with v3.VNumberInput(
-                        v_model=f"self.{name}[{i}]",
+                        v_model=f"self.values['{name}'][{i}]",
                         control_variant="hidden",
                         variant="outlined",
                         density="compact",
@@ -146,7 +142,7 @@ def gui_enumeration(parameter):
 
     return v3.VSelect(
         label=label,
-        v_model=f"self.{name}",
+        v_model=f"self.values['{name}']",
         items=(str(items),),
         variant="outlined",
         hide_details=True,
@@ -174,7 +170,7 @@ def gui_string(parameter):
 
     return v3.VTextField(
         label=label,
-        v_model=f"self.{name}",
+        v_model=f"self.values['{name}']",
         variant="outlined",
         hide_details=True,
         density="compact",
@@ -184,7 +180,7 @@ def gui_string(parameter):
 
 def gui_scalars(parameter):
     # No array picker yet: the kernel runs with its own default, usually the
-    # active scalars (see to_param).
+    # active scalars (see CORE_TYPES).
     logger.debug("No GUI for select_scalars yet: {}", parameter.get("name"))
     return False
 
@@ -214,115 +210,134 @@ def param_to_gui(parameter) -> str:
 
 
 def to_gui(params) -> str:
-    return "".join(
-        [
-            '<v-col class="pa-0">',
-            *[param_to_gui(p) for p in params if param_to_gui(p)],
-            "</v-col>",
-        ]
-    )
+    controls = [param_to_gui(p) for p in params]
+    return "".join(['<v-col class="pa-0">', *filter(None, controls), "</v-col>"])
 
 
-def to_param(name, param):
-    name = param.get("name")
-    param_type = param.get("type")
-    param_default = param.get("default")
-
-    if name is None:
-        return {}
-
-    core_py_type = None
-    if param_type == "bool":
-        core_py_type = bool
-        if param_default is None:
-            param_default = False
-    elif param_type == "int":
-        core_py_type = int
-    elif param_type == "double":
-        core_py_type = float
-    elif param_type == "enumeration":
-        core_py_type = int
-    elif param_type == "xyz_header":
-        return {}
-    elif param_type == "select_scalars":
-        # No array picker yet (gui_scalars): leave it out, so the kernel
-        # falls back to its own default, usually the active scalars.
-        return {}
-    elif param_type in PATH_TYPES or param_type == "string":
-        core_py_type = str
-
-    if core_py_type is None:
-        msg = f"Invalid parameter type::{param_type} for {name}::{param.get('name')}"
-        raise ValueError(msg)
-
-    py_type = core_py_type
-    py_default = param_default
-    add_on = {}
-    if isinstance(param_default, list | tuple):
-        py_type = list[core_py_type]
-        py_default = list(py_default)
-        add_on["client_deep_reactive"] = True
-
-    return {name: dataclass.Sync(py_type, py_default, **add_on)}
+def _coerce_one(core_type, value):
+    if value is None or isinstance(value, core_type):
+        return value
+    return core_type(value)
 
 
-def parameters_model_class(meta):
-    name = meta.get("name")
-    parameters = meta.get("parameters", [])
-    key = (name, json.dumps(parameters, sort_keys=True))
-    klass = PARAMETERS_MODEL_CLASSES.get(key)
-
-    if klass:
-        return klass
-
-    # print("=" * 60)
-    # print("meta", meta)
-    # for p in parameters:
-    #     print(p)
-    # print("=" * 60)
-
-    # Generate klass
-    namespace = {}
-    all_fields = [
-        to_param(name, p) for p in parameters if TYPE_MAPPING.get(p.get("type"))
-    ]
-    for fields in all_fields:
-        namespace.update(fields)
-
-    # Generate UI
-    tpl = to_gui(parameters)
-
-    @classmethod
-    def generate_gui(*_):
-        return tpl
-
-    namespace["generate_gui"] = generate_gui
-
-    # Create class
-    klass = type(name, (dataclass.StateDataModel,), namespace)
-    _ensure_field_registries(klass)
-    PARAMETERS_MODEL_CLASSES[key] = klass
-    return klass
+def coerce(parameter, value):
+    """``value`` as the declared type of ``parameter`` (state files store
+    ``4`` for a double; lists are coerced element-wise). ``None`` stays."""
+    core_type = CORE_TYPES[parameter.get("type")]
+    if isinstance(value, list | tuple):
+        return [_coerce_one(core_type, v) for v in value]
+    return _coerce_one(core_type, value)
 
 
-def _ensure_field_registries(klass):
-    """trame-dataclass creates a model class's field registries when its
-    first ``Sync`` field registers itself; a parameter-less transform has no
-    field, so create the (empty) registries here."""
-    for key in (
-        "FIELD_NAMES",
-        "DATACLASS_NAMES",
-        "CLIENT_NAMES",
-        "CLIENT_ONLY_NAMES",
-        "CLIENT_DEEP_REACTIVE",
-    ):
-        if key not in klass.__dict__:
-            setattr(klass, key, set(getattr(klass, key, set())))
-    for key in ("ENCODERS", "TYPE_CHECKING"):
-        if key not in klass.__dict__:
-            setattr(klass, key, dict(getattr(klass, key, {})))
+# The parameters with a value in the panel. "xyz_header" is decoration only
+# and "select_scalars" has no picker yet (gui_scalars): left out, the kernel
+# falls back to its own default, usually the active scalars.
+CORE_TYPES = {
+    "bool": bool,
+    "int": int,
+    "double": float,
+    "enumeration": int,
+    "string": str,
+    **dict.fromkeys(PATH_TYPES, str),
+}
 
 
-def to_parameters_model(server, meta):
-    klass = parameters_model_class(meta)
-    return klass(server)
+def default_values(parameters) -> dict:
+    """Parameter name -> default value, for the parameters with a value.
+    Raises ``ValueError`` (or ``TypeError``) on a default of the wrong
+    type."""
+    values = {}
+    for parameter in parameters:
+        name = parameter.get("name")
+        if name is None or parameter.get("type") not in CORE_TYPES:
+            continue
+        default = parameter.get("default")
+        if default is None and parameter.get("type") == "bool":
+            default = False
+        values[name] = coerce(parameter, default)
+    return values
+
+
+# Template names are lowercased on the client (component names), which
+# dataclass ids (mixed case) do not survive: number them instead.
+_TEMPLATE_IDS = itertools.count(1)
+
+
+class OperatorParameters(StateDataModel):
+    """The parameter panel of a catalog node: its ``definition`` (the
+    entry's ``parameters`` list) and ``values`` (name -> value, for the
+    parameters with a control). The panel's HTML lives in the trame state
+    under ``template_key`` (not the class' ``generate_gui``, which
+    trame-dataclass caches per class) and is rendered with
+    ``client.ServerTemplate(name=template_name)``; ``set_definition``
+    recomputes both values and template."""
+
+    definition = Sync(list, list)
+    values = Sync(dict, dict, client_deep_reactive=True)
+    template_name = Sync(str, "")
+
+    def __init__(self, server, parameters=None, **kwargs):
+        super().__init__(server, **kwargs)
+        self.template_name = f"operator_{next(_TEMPLATE_IDS)}"
+        self.set_definition(parameters or [])
+
+    @property
+    def template_key(self) -> str:
+        return f"trame__template_{self.template_name}"
+
+    def parameter(self, name) -> dict | None:
+        """The definition of parameter ``name``."""
+        for parameter in self.definition:
+            if parameter.get("name") == name:
+                return parameter
+        return None
+
+    def set_definition(self, parameters, keep=None):
+        """Use the ``parameters`` definition: values go back to their
+        defaults, but for ``keep`` (name -> value) entries still declared.
+        Raises ``ValueError`` (or ``TypeError``) on an unusable default,
+        leaving the panel untouched."""
+        values = default_values(parameters)
+        self.definition = list(parameters)
+        for name, value in (keep or {}).items():
+            if name in values:
+                values[name] = coerce(self.parameter(name), value)
+        self.values = values
+        self.update_template()
+
+    def set(self, **values):
+        """Set the values of declared parameters (others are ignored),
+        coerced to their declared types."""
+        self.values = {
+            **self.values,
+            **{
+                name: coerce(self.parameter(name), value)
+                for name, value in values.items()
+                if name in self.values
+            },
+        }
+
+    def panel_html(self) -> str:
+        """The panel's HTML for the current definition."""
+        return (
+            f"<trame-dataclass :instance=\"'{self._id}'\" "
+            'v-slot="{ dataclass: self }">'
+            f"{to_gui(self.definition)}"
+            "</trame-dataclass>"
+        )
+
+    def update_template(self):
+        """Publish ``panel_html()`` as the panel's template."""
+        if self.server is not None:
+            with self.server.state as state:
+                state[self.template_key] = self.panel_html()
+
+    def release(self):
+        """Empty the panel's template once its node is gone."""
+        if self.server is not None:
+            with self.server.state as state:
+                state[self.template_key] = "<div></div>"
+
+
+def to_parameters_model(server, meta) -> OperatorParameters:
+    return OperatorParameters(server, parameters=meta.get("parameters") or [])

@@ -1,5 +1,5 @@
 """The transform editor, driven through the app: it stages a copy of a
-catalog node's name, definition and script; Cancel drops every edit
+catalog node's definition (whose label names the node) and script; Cancel drops every edit
 (the parameter panel's too), Apply commits them all through the library
 (rebuilding the parameters panel when the declared parameters change) and
 re-executes; an edit the library refuses leaves the node untouched.
@@ -98,47 +98,45 @@ async def run_session(volume_file):
         assert scale.state == "Current"
         np.testing.assert_allclose(scalars(scale), blurred * 2.0)
 
-        # Opening stages a copy of the node's name, definition and script.
+        # Opening stages a copy of the node's definition and script.
         dialog.open(scale._id)
         assert editor.show
-        assert (editor.label, editor.definition, editor.script) == (
-            "Scale",
-            SCALE_DEFINITION,
-            SCALE_SCRIPT,
-        )
+        assert (editor.definition, editor.script) == (SCALE_DEFINITION, SCALE_SCRIPT)
 
         # Cancel drops every edit, the parameter panel's included.
-        editor.label = "Renamed"
         editor.script = OFFSET_SCRIPT
-        editor.definition = with_parameters(SCALE_DEFINITION)
-        scale.parameters.factor = 3.0
+        editor.definition = {**with_parameters(SCALE_DEFINITION), "label": "Renamed"}
+        scale.parameters.set(factor=3.0)
         dialog.cancel()
         assert not editor.show
         assert scale.node.label == "Scale"
         assert scale.node.script == SCALE_SCRIPT
         assert json.loads(scale.node.json_description) == SCALE_DEFINITION
         assert scale.node.parameter("factor") == 2.0
-        assert scale.parameters.factor == 2.0
+        assert scale.parameters.values["factor"] == 2.0
         assert scale.node.state.value == "Current"
 
         # Apply commits them all and runs once: a new parameter gets a
-        # field, and the panel value typed before carries over to it.
+        # value and a control in the same panel, and the panel value typed
+        # before carries over.
         dialog.open(scale._id)
         assert editor.script == SCALE_SCRIPT
         panel = scale.parameters
-        scale.parameters.factor = 3.0
-        editor.label = "Scaled"
+        template = panel.panel_html()
+        scale.parameters.set(factor=3.0)
         editor.script = OFFSET_SCRIPT
         editor.definition = with_parameters(
-            SCALE_DEFINITION,
+            {**SCALE_DEFINITION, "label": "Scaled"},
             *SCALE_DEFINITION["parameters"],
             {"name": "offset", "type": "double", "default": 1.0},
         )
         assert dialog.apply()
         assert editor.message_type == "success"
         assert scale.node.label == scale.label == "Scaled"
-        assert scale.parameters is not panel
-        assert scale.parameters.offset == 1.0
+        assert scale.parameters is panel
+        assert server.state[panel.template_key] == panel.panel_html() != template
+        assert "offset" in panel.panel_html()
+        assert scale.parameters.values["offset"] == 1.0
         assert scale.node.parameter("factor") == 3.0
         assert scale.definition == editor.definition
         await wait_idle(manager)
@@ -147,7 +145,7 @@ async def run_session(volume_file):
 
         # Retyping a parameter resets its value, and says so.
         retyped = with_parameters(
-            SCALE_DEFINITION,
+            {**SCALE_DEFINITION, "label": "Scaled"},
             {"name": "factor", "type": "int", "default": 4},
             {"name": "offset", "type": "double", "default": 1.0},
         )
@@ -173,8 +171,7 @@ async def run_session(volume_file):
         assert scale.parameters is panel
 
         # OK applies and closes.
-        editor.definition = retyped
-        editor.label = "Final"
+        editor.definition = {**retyped, "label": "Final"}
         dialog.ok()
         assert not editor.show
         assert scale.node.label == "Final"

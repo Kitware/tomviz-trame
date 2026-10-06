@@ -236,9 +236,9 @@ class PipelineManager(TrameComponent):
         for view_id in list(self.views):
             self.remove_view(view_id)
         for model in list(self.node_models.values()):
-            unbind = getattr(model, "unbind_parameters", None)
-            if unbind is not None:
-                unbind()
+            release = getattr(model, "release_parameters", None)
+            if release is not None:
+                release()
             self._untrack(model)
         self.model.active_node = []
         self._selected_node = None
@@ -1013,9 +1013,9 @@ class PipelineManager(TrameComponent):
         self._pending.pop(node.id, None)
         self._awaiting_links.discard(node.id)
         owned_tip = self._forget_node(node)
-        unbind = getattr(model, "unbind_parameters", None)
-        if unbind is not None:
-            unbind()
+        release = getattr(model, "release_parameters", None)
+        if release is not None:
+            release()
         self.pipeline.remove_node(node)
         self._untrack(model)
         self._refresh_sink_sources()
