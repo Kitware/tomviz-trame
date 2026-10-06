@@ -105,8 +105,8 @@ def test_parameterless_description_still_makes_a_model():
     from tomviz_web.app.parameters_gui import to_parameters_model
 
     model = to_parameters_model(None, {"name": "NoParams", "parameters": []})
-    assert set() == model.FIELD_NAMES
-    assert "<v-" in model.generate_gui()  # an empty column, no controls
+    assert model.values == {}
+    assert "<v-" in model.panel_html()  # an empty column, no controls
 
 
 def test_dataset_parameters_are_ports_not_controls():
@@ -120,8 +120,8 @@ def test_dataset_parameters_are_ports_not_controls():
         ],
     }
     model = to_parameters_model(None, description)
-    assert {"weight"} == model.FIELD_NAMES
-    assert "second_dataset" not in model.generate_gui()
+    assert model.values == {"weight": 0.5}
+    assert "second_dataset" not in model.panel_html()
 
     node = build_transform_node(description, KERNELS / "CombineDatasets.py")
     assert [port.name for port in node.input_ports()] == [INPUT_PORT, "second_dataset"]
@@ -134,7 +134,7 @@ def test_every_kernel_makes_a_parameters_model(name):
 
     description = json.loads((KERNELS / f"{name}.json").read_text())
     model = to_parameters_model(None, description)
-    assert "<v-" in model.generate_gui()
+    assert "<v-" in model.panel_html()
 
 
 def test_parameter_edits_are_staged_until_applied(gaussian):
@@ -152,22 +152,22 @@ def test_parameter_edits_are_staged_until_applied(gaussian):
         parameters=to_parameters_model(None, description),
     )
     model.bind_parameters()
-    assert model.parameters.sigma == 1.0
+    assert model.parameters.values["sigma"] == 1.0
     assert model.parameters_dirty is False
 
     # Typing in the panel edits the mirror; the watcher (called directly:
     # watchers need a loop) only flags it, the node is untouched.
-    model.parameters.sigma = 2.5
-    model._on_parameters_change(2.5)
+    model.parameters.set(sigma=2.5)
+    model._on_parameters_change(model.parameters.values)
     assert model.parameters_dirty is True
     assert node.parameter("sigma") == 1.0
 
     model.reset_parameters()
-    assert model.parameters.sigma == 1.0
+    assert model.parameters.values["sigma"] == 1.0
     assert model.parameters_dirty is False
 
-    model.parameters.sigma = 3.0
-    model._on_parameters_change(3.0)
+    model.parameters.set(sigma=3.0)
+    model._on_parameters_change(model.parameters.values)
     model.apply_parameters()
     assert node.parameter("sigma") == 3.0
     assert model.parameters_dirty is False

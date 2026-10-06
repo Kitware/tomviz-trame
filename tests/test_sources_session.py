@@ -90,10 +90,10 @@ async def run_session():
         assert manager.model.active_node == [constant._id]
         assert state.property_templates == ["transform"]
         assert constant.entry_name == "ConstantDataset"
-        assert {"shape", "value"} == constant.parameters.FIELD_NAMES
-        assert constant.parameters.value == 2.0
-        constant.parameters.value = 7.0
-        constant._on_parameters_change(7.0)  # the watcher, called directly
+        assert {"shape", "value"} == set(constant.parameters.values)
+        assert constant.parameters.values["value"] == 2.0
+        constant.parameters.set(value=7.0)
+        constant._on_parameters_change()  # the watcher, called directly
         assert constant.parameters_dirty is True
         constant.apply_parameters()
         await wait_idle(manager)
@@ -161,8 +161,8 @@ async def run_state_session(tvsm):
             m for m in manager.model.nodes if isinstance(m, data_model.SourceNodeModel)
         ]
         assert source.entry_name == "ConstantDataset"
-        assert {"shape", "value"} == source.parameters.FIELD_NAMES
-        assert source.parameters.value == 3.0
+        assert {"shape", "value"} == set(source.parameters.values)
+        assert source.parameters.values["value"] == 3.0
         assert source.parameters_dirty is False
         assert source.state == "Current"
         assert np.all(scalars(source) == 3.0)

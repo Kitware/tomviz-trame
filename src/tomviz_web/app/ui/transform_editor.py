@@ -1,16 +1,18 @@
 """Dialog configuring a catalog node (a transform, or a catalog source): its
-name, its definition (the entry's JSON description), its script and its
-parameters. Every edit is staged until Apply or OK, which commit them all
-and re-execute the graph once; Cancel (or the close button) drops them,
-including the parameter panel's. For a node the manager holds until it is
-confirmed (a new transform), Apply/OK also release it and Cancel removes it,
+definition (the entry's JSON description, whose label names the node), its
+script and its parameters. Every edit is staged until Save changes or OK, which commit them
+all and re-execute the graph once; Cancel (or the close button) drops them,
+including the parameter panel's. Save changes is only enabled while the
+definition or script has unsaved edits, and OK is disabled until they are
+saved. For a node the manager holds until it is confirmed (a new transform),
+Save changes/OK also release it and Cancel removes it,
 restoring the graph (see ``PipelineManager.is_pending``)."""
 
 import copy
 
 from loguru import logger
 from trame.app.dataclass import StateDataModel, Sync, get_instance
-from trame.widgets import code, dataclass, html
+from trame.widgets import client, code, dataclass, html
 from trame.widgets import vuetify3 as v3
 
 from tomviz_web.app.data_model import DataNodeModel
@@ -32,20 +34,29 @@ PARAMETER_TYPES = [
 ]
 NUMBER_TYPES = "['int', 'double']"
 TEXT_TYPES = "['string', 'file', 'save_file', 'directory']"
+# Whether the staged definition or script differ from the committed ones.
+HAS_CHANGES = (
+    "(editor.script !== editor.saved_script"
+    " || JSON.stringify(editor.definition)"
+    " !== JSON.stringify(editor.saved_definition))"
+)
 
 
 class TransformEditorModel(StateDataModel):
-    """The dialog's own state: which node it configures, the staged name,
-    definition and script, and the outcome of the last Apply (``message``,
+    """The dialog's own state: which node it configures, the staged
+    definition (its label is the node's name) and script, and the outcome of the last Apply (``message``,
     a ``v-alert`` type). ``definition`` is deep reactive, so the client's
-    nested edits (a parameter's fields) reach the server."""
+    nested edits (a parameter's fields) reach the server. ``saved_*`` hold
+    the last committed definition and script, so the client can tell
+    whether there is anything to save."""
 
     show = Sync(bool, False)
     tab = Sync(str, "parameters")
     transform_id = Sync(str, "")  # the DataNodeModel being configured
-    label = Sync(str, "")
     definition = Sync(dict, dict, client_deep_reactive=True)
     script = Sync(str, "")
+    saved_definition = Sync(dict, dict)
+    saved_script = Sync(str, "")
     message = Sync(str, "")
     message_type = Sync(str, "info")
 
@@ -96,7 +107,7 @@ class TransformEditorDialog(html.Div):
                 max_width="1000px",
                 width="80vw",
             ):
-                with v3.VCardItem(title=("`Configure - ${editor.label}`",)):
+                with v3.VCardItem(title=("`Configure - ${editor.definition.label}`",)):
                     with v3.Template(v_slot_append=True):
                         v3.VBtn(
                             icon="mdi-close",
@@ -105,34 +116,24 @@ class TransformEditorDialog(html.Div):
                             click=self.cancel,
                         )
                 v3.VDivider()
-                with v3.VCardText(classes="flex-0-0 pb-0"):
-                    v3.VTextField(
-                        label="Name",
-                        v_model="editor.label",
-                        variant="outlined",
+                with html.Div(classes="d-flex align-center flex-0-0 px-4 mt-2"):
+                    with v3.VTabs(v_model="editor.tab", density="compact"):
+                        v3.VTab("Definition", value="definition", classes="text-none")
+                        v3.VTab("Script", value="script", classes="text-none")
+                        v3.VTab("Parameters", value="parameters", classes="text-none")
+                        v3.VTab("Execution", value="execution", classes="text-none")
+                    v3.VSpacer()
+                    v3.VBtn(
+                        "Save changes",
+                        prepend_icon="mdi-content-save-outline",
+                        classes="text-none",
                         density="compact",
-                        hide_details=True,
+                        variant=(f"{HAS_CHANGES} && 'flat'",),
+                        color=(f"{HAS_CHANGES} && 'primary'",),
+                        disabled=(f"!{HAS_CHANGES}",),
+                        click=self.apply,
                     )
-                with v3.VTabs(
-                    v_model="editor.tab",
-                    density="compact",
-                    classes="flex-0-0 px-4 mt-2",
-                ):
-                    v3.VTab("Definition", value="definition", classes="text-none")
-                    v3.VTab("Script", value="script", classes="text-none")
-                    v3.VTab("Parameters", value="parameters", classes="text-none")
-                    v3.VTab("Execution", value="execution", classes="text-none")
                 v3.VDivider()
-                v3.VAlert(
-                    v_if="editor.message",
-                    text=("editor.message",),
-                    type=("editor.message_type",),
-                    density="compact",
-                    variant="tonal",
-                    closable=True,
-                    click_close="editor.message = ''",
-                    classes="flex-0-0 mx-4 mt-2",
-                )
                 with v3.VTabsWindow(
                     v_model="editor.tab",
                     classes="flex-fill overflow-auto",
@@ -140,7 +141,7 @@ class TransformEditorDialog(html.Div):
                     with v3.VTabsWindowItem(value="definition", classes="pa-4"):
                         self._definition()
 
-                    with v3.VTabsWindowItem(value="script", classes="h-100"):
+                    with v3.VTabsWindowItem(value="script", classes="h-100 py-2"):
                         code.Editor(
                             v_model="editor.script",
                             language="python",
@@ -156,16 +157,25 @@ class TransformEditorDialog(html.Div):
                     v3.VTabsWindowItem(value="execution", classes="pa-4")
                 v3.VDivider()
                 with v3.VCardActions(classes="flex-0-0 px-4"):
+                    v3.VAlert(
+                        v_if="editor.message",
+                        text=("editor.message",),
+                        type=("editor.message_type",),
+                        density="compact",
+                        variant="tonal",
+                        closable=True,
+                        click_close="editor.message = ''",
+                        classes="ny-n2 py-1",
+                    )
                     v3.VSpacer()
                     v3.VBtn("Cancel", classes="text-none", click=self.cancel)
-                    v3.VBtn(
-                        "Apply", classes="text-none", variant="tonal", click=self.apply
-                    )
+                    # Unsaved definition/script edits must be saved first.
                     v3.VBtn(
                         "OK",
                         classes="text-none",
                         variant="flat",
                         color="primary",
+                        disabled=(HAS_CHANGES,),
                         click=self.ok,
                     )
 
@@ -238,7 +248,7 @@ class TransformEditorDialog(html.Div):
                         density="compact",
                         variant="plain",
                         classes="mr-2",
-                        click_stop="editor.definition.parameters.splice(idx, 1)",
+                        v_on_click_stop="editor.definition.parameters.splice(idx, 1)",
                     )
                 with v3.VExpansionPanelText(classes="border-t-thin pt-3"):
                     with v3.VRow(dense=True):
@@ -331,12 +341,16 @@ class TransformEditorDialog(html.Div):
             style="white-space: pre-wrap;",
         )
         # Optional chaining: a canceled insertion removes the node this
-        # still points at.
-        dataclass.Gui(instance=("transform?.parameters?._id",))
+        # still points at. Guarded: without a name, the template shown is
+        # "main" (the whole app).
+        client.ServerTemplate(
+            v_if="transform?.parameters?.template_name",
+            name=("transform.parameters.template_name",),
+        )
 
     def open(self, model_id):
         """Show the dialog for the catalog node model ``model_id``, staging
-        a copy of the node's name, definition and script."""
+        a copy of the node's definition and script."""
         model = get_instance(model_id)
         if not isinstance(model, DataNodeModel) or model.parameters is None:
             logger.warning("No catalog node to configure: {}", model_id)
@@ -344,9 +358,10 @@ class TransformEditorDialog(html.Div):
 
         model.pull_definition()
         self.editor.transform_id = model._id
-        self.editor.label = model.label
         self.editor.definition = copy.deepcopy(model.definition)
         self.editor.script = model.node.script
+        self.editor.saved_definition = copy.deepcopy(model.definition)
+        self.editor.saved_script = model.node.script
         self.editor.message = ""
         self.editor.show = True
 
@@ -374,11 +389,13 @@ class TransformEditorDialog(html.Div):
             self.editor.message_type = "error"
             self.editor.message = f"Edits not applied: {error}."
             return False
+        self.editor.saved_definition = copy.deepcopy(self.editor.definition)
+        self.editor.saved_script = self.editor.script
 
-        # The name only: the definition's label is the default name of
-        # new nodes (desktop parity).
-        model.node.label = self.editor.label
-        model.label = self.editor.label
+        # The definition's label names the node.
+        label = self.editor.definition.get("label") or model.label
+        model.node.label = label
+        model.label = label
         self.ctx.pipeline.commit_pending(model._id)
 
         # The panel's values last: set_parameters re-executes the graph.

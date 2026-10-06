@@ -106,7 +106,7 @@ async def run_session(volume_file, other_file, tilt_series_file):
         second = combine.inputs[1]
         assert second.link is None
         assert combine.state == "New"
-        assert "second_dataset" not in combine.parameters.FIELD_NAMES
+        assert "second_dataset" not in combine.parameters.values
 
         other = data_model.get_instance(manager.load_file(other_file))
         await wait_idle(manager)
