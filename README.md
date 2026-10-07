@@ -2,7 +2,7 @@
 
 trame and VTK based web version of the tomviz tomography application
 
-![tomviz](https://raw.githubusercontent.com/Kitware/tomviz-web/main/tomviz.png)
+![tomviz](tomviz.png)
 
 ## License
 
