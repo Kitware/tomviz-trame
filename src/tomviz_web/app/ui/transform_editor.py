@@ -1,21 +1,37 @@
 """Dialog configuring a catalog node (a transform, or a catalog source): its
 definition (the entry's JSON description, whose label names the node), its
-script and its parameters. Every edit is staged until Save changes or OK, which commit them
+script, its parameters and where it runs. Every edit is staged until Save changes or OK, which commit them
 all and re-execute the graph once; Cancel (or the close button) drops them,
 including the parameter panel's. Save changes is only enabled while the
 definition or script has unsaved edits, and OK is disabled until they are
 saved. For a node the manager holds until it is confirmed (a new transform),
 Save changes/OK also release it and Cancel removes it,
-restoring the graph (see ``PipelineManager.is_pending``)."""
+restoring the graph (see ``PipelineManager.is_pending``).
 
+The Execution tab picks the node's executor (desktop parity): Internal (the
+application's Python, on the executor's worker thread) or External (a
+subprocess under the Python environment picked with a folder browser). The
+environment is checked in the background as it is typed or picked
+(``pipeline/environment.py``); the verdict is advisory. A definition with
+``externalOnly`` cannot run internally. The environment applied last is
+remembered per definition name (``external_env_paths`` in the settings
+file) and prefills the next node of the same transform."""
+
+import asyncio
 import copy
 
 from loguru import logger
+from trame.app import asynchronous
 from trame.app.dataclass import StateDataModel, Sync, get_instance
 from trame.widgets import client, code, dataclass, html
 from trame.widgets import vuetify3 as v3
 
 from tomviz_web.app.data_model import DataNodeModel
+from tomviz_web.app.pipeline.environment import (
+    check_environment,
+    resolve_environment_root,
+)
+from tomviz_web.app.ui.open_data import FileLoader
 
 # Parameter types the definition editor offers (the desktop app's list, but
 # "dataset": in a v1 definition such a parameter is an input port of the
@@ -34,6 +50,17 @@ PARAMETER_TYPES = [
 ]
 NUMBER_TYPES = "['int', 'double']"
 TEXT_TYPES = "['string', 'file', 'save_file', 'directory']"
+EXTERNAL = "external"  # ExternalNodeExecutor.type_name; "" is internal
+# Executor choices; Internal is disabled for an externalOnly definition.
+EXECUTORS = (
+    "[{ title: 'Internal', value: '',"
+    " subtitle: 'In the application, on a worker thread',"
+    " disabled: !!editor.definition.externalOnly },"
+    " { title: 'External', value: 'external',"
+    " subtitle: 'In a subprocess, under another Python environment' }]"
+)
+# Seconds the environment field must stay unchanged before it is checked.
+CHECK_DELAY = 0.4
 # Whether the staged definition or script differ from the committed ones.
 HAS_CHANGES = (
     "(editor.script !== editor.saved_script"
@@ -48,7 +75,10 @@ class TransformEditorModel(StateDataModel):
     a ``v-alert`` type). ``definition`` is deep reactive, so the client's
     nested edits (a parameter's fields) reach the server. ``saved_*`` hold
     the last committed definition and script, so the client can tell
-    whether there is anything to save."""
+    whether there is anything to save. ``executor`` (``""`` or
+    ``"external"``) and ``env_path`` stage the Execution tab, and
+    ``env_status`` (``""``, ``checking``, ``ok`` or ``problem``) and
+    ``env_message`` hold the environment check's verdict."""
 
     show = Sync(bool, False)
     tab = Sync(str, "parameters")
@@ -59,6 +89,10 @@ class TransformEditorModel(StateDataModel):
     saved_script = Sync(str, "")
     message = Sync(str, "")
     message_type = Sync(str, "info")
+    executor = Sync(str, "")
+    env_path = Sync(str, "")
+    env_status = Sync(str, "")
+    env_message = Sync(str, "")
 
 
 def json_field(label, key, **kwargs):
@@ -91,6 +125,23 @@ class TransformEditorDialog(html.Div):
         self.editor = TransformEditorModel(self.server)
         self.ctrl.open_transform_editor = self.open
         self.ctx.transform_editor = self
+
+        # The environment check: a generation drops superseded results, and
+        # the verdict of a check that rewrote the path to its root is kept
+        # for that root, so the rewrite is not checked again.
+        self._check_generation = 0
+        self._verdict = None
+        self.editor.watch(["executor", "env_path"], self._on_execution_change)
+
+        with self:
+            self.env_picker = FileLoader(
+                name="tomviz_env",
+                title="Select Python Environment",
+                confirm="Select",
+                confirm_icon="mdi-folder-check-outline",
+                directory=True,
+                on_select=self._on_environment_selected,
+            )
 
         with (
             self,
@@ -154,7 +205,8 @@ class TransformEditorDialog(html.Div):
 
                     with v3.VTabsWindowItem(value="parameters", classes="pa-4"):
                         self._parameters()
-                    v3.VTabsWindowItem(value="execution", classes="pa-4")
+                    with v3.VTabsWindowItem(value="execution", classes="pa-4"):
+                        self._execution()
                 v3.VDivider()
                 with v3.VCardActions(classes="flex-0-0 px-4"):
                     v3.VAlert(
@@ -348,21 +400,155 @@ class TransformEditorDialog(html.Div):
             name=("transform.parameters.template_name",),
         )
 
+    def _execution(self):
+        v3.VSelect(
+            label="Executor",
+            v_model="editor.executor",
+            items=(EXECUTORS,),
+            item_props=True,
+            variant="outlined",
+            density="compact",
+            hide_details=True,
+        )
+        html.Div(
+            "This transform only runs in an external Python environment.",
+            v_if="editor.definition.externalOnly",
+            classes="text-caption text-medium-emphasis mt-1",
+        )
+        with html.Div(classes="d-flex align-center ga-2 mt-4"):
+            v3.VTextField(
+                label="Python environment",
+                v_model="editor.env_path",
+                placeholder="Path to a Python environment containing tomviz-pipeline",
+                persistent_placeholder=True,
+                disabled=(f"editor.executor !== '{EXTERNAL}'",),
+                variant="outlined",
+                density="compact",
+                hide_details=True,
+            )
+            v3.VBtn(
+                "Browse",
+                prepend_icon="mdi-folder-open-outline",
+                classes="text-none",
+                variant="tonal",
+                disabled=(f"editor.executor !== '{EXTERNAL}'",),
+                click=self.browse_environment,
+            )
+        v3.VAlert(
+            v_if=f"editor.executor === '{EXTERNAL}' && editor.env_status",
+            text=("editor.env_message",),
+            type=(
+                "{ checking: 'info', ok: 'success', problem: 'warning' }"
+                "[editor.env_status]",
+            ),
+            icon=("editor.env_status === 'checking' ? 'mdi-timer-sand' : undefined",),
+            density="compact",
+            variant="tonal",
+            classes="mt-4",
+            style="white-space: pre-wrap;",
+        )
+
+    # -------------------------------------------------------------------------
+    # Execution
+    # -------------------------------------------------------------------------
+
+    def browse_environment(self):
+        """Pick the environment's folder, starting at the one typed."""
+        self.env_picker.open(self.editor.env_path.strip() or None)
+
+    def _on_environment_selected(self, path):
+        self.editor.env_path = str(path)
+
+    def _on_execution_change(self, *_values):
+        self._schedule_environment_check()
+
+    def _schedule_environment_check(self, delay=CHECK_DELAY):
+        """Check the staged environment once it stops changing for
+        ``delay`` seconds; nothing to check while Internal is picked."""
+        self._check_generation += 1
+        path = self.editor.env_path.strip()
+        verdict, self._verdict = self._verdict, None
+        if self.editor.executor != EXTERNAL or not path:
+            self.editor.env_status = ""
+            self.editor.env_message = ""
+            return
+        if verdict is not None and path == verdict.env_path:
+            self._show_verdict(verdict)
+            return
+        asynchronous.create_task(
+            self._check_environment(path, self._check_generation, delay)
+        )
+
+    async def _check_environment(self, path, generation, delay):
+        await asyncio.sleep(delay)
+        if generation != self._check_generation:
+            return
+        self.editor.env_status = "checking"
+        self.editor.env_message = "Checking the environment..."
+        loop = asyncio.get_running_loop()
+        info = await loop.run_in_executor(None, check_environment, path)
+        if generation != self._check_generation:
+            return
+
+        # A pick of <env>/bin, of the interpreter or a relative path shows
+        # the root instead.
+        if info.env_path and info.env_path != self.editor.env_path:
+            self._verdict = info
+            self.editor.env_path = info.env_path
+        self._show_verdict(info)
+
+    def _show_verdict(self, info):
+        self.editor.env_status = "ok" if info.ok else "problem"
+        self.editor.env_message = info.message
+
+    def _staged_executor(self) -> tuple[str, str]:
+        """The executor type and environment root the Execution tab
+        stages, as they are applied."""
+        executor = self.editor.executor
+        if self.editor.definition.get("externalOnly"):
+            executor = EXTERNAL
+        if executor != EXTERNAL:
+            return "", ""
+        typed = self.editor.env_path.strip()
+        return EXTERNAL, resolve_environment_root(typed) or typed
+
+    def _remember_environment(self, env_path):
+        """Prefill ``env_path`` for the next node of this definition."""
+        name = self.editor.definition.get("name")
+        paths = self.state.external_env_paths or {}
+        if name and env_path and paths.get(name) != env_path:
+            self.state.external_env_paths = {**paths, name: env_path}
+
+    # -------------------------------------------------------------------------
+
     def open(self, model_id):
         """Show the dialog for the catalog node model ``model_id``, staging
-        a copy of the node's definition and script."""
+        a copy of the node's definition, script and executor."""
         model = get_instance(model_id)
         if not isinstance(model, DataNodeModel) or model.parameters is None:
             logger.warning("No catalog node to configure: {}", model_id)
             return
 
         model.pull_definition()
+        model.pull_executor()
         self.editor.transform_id = model._id
         self.editor.definition = copy.deepcopy(model.definition)
         self.editor.script = model.node.script
         self.editor.saved_definition = copy.deepcopy(model.definition)
         self.editor.saved_script = model.node.script
         self.editor.message = ""
+
+        # A node without an environment starts with the one last applied
+        # for its definition, and an externalOnly one with External.
+        remembered = self.state.external_env_paths or {}
+        executor = model.executor_type
+        if model.definition.get("externalOnly"):
+            executor = EXTERNAL
+        self.editor.executor = executor
+        self.editor.env_path = model.executor_env_path or remembered.get(
+            model.definition.get("name"), ""
+        )
+        self._schedule_environment_check(delay=0)
         self.editor.show = True
 
     def cancel(self):
@@ -396,22 +582,35 @@ class TransformEditorDialog(html.Div):
         label = self.editor.definition.get("label") or model.label
         model.node.label = label
         model.label = label
+
+        # Where it runs, before anything does.
+        executor, env_path = self._staged_executor()
+        model.apply_executor(executor, env_path)
+        self.editor.executor = executor
+        if executor:
+            self.editor.env_path = env_path
+        self._remember_environment(env_path)
         self.ctx.pipeline.commit_pending(model._id)
 
         # The panel's values last: set_parameters re-executes the graph.
         if not model.apply_parameters():
             self.ctx.pipeline.execute()
 
+        notes = []
         if reset:
-            self.editor.message_type = "warning"
-            self.editor.message = (
-                "Edits applied. These parameters went back to their defaults: "
+            notes.append(
+                "These parameters went back to their defaults: "
                 + ", ".join(reset)
                 + "."
             )
-        else:
-            self.editor.message_type = "success"
-            self.editor.message = "Edits applied."
+        if executor and not env_path:
+            notes.append(
+                "External execution needs a Python environment: until one "
+                "containing tomviz-pipeline (and the node's dependencies) is "
+                "selected in the Execution tab, the node fails."
+            )
+        self.editor.message_type = "warning" if notes else "success"
+        self.editor.message = " ".join(["Edits applied.", *notes])
         return True
 
     def ok(self):

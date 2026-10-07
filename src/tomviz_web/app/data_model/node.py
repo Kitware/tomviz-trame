@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 
 from loguru import logger
-from tomviz_pipeline import Node, OutputPort, ScriptableNode
+from tomviz_pipeline import ExternalNodeExecutor, Node, OutputPort, ScriptableNode
 from trame.app.dataclass import ServerOnly, StateDataModel, Sync
 
 from tomviz_web.app.parameters_gui import (
@@ -111,12 +111,21 @@ class DataNodeModel(NodeModel):
     node) also mirrors its ``definition`` (the JSON description).
     ``apply_edits`` replaces the node's definition and script, as the
     transform editor's Apply does, and updates ``parameters`` in place.
+
+    Where the node runs mirrors ``Node.node_executor``: ``executor_type``
+    is ``""`` in the application's own Python (the library's implicit
+    ``InternalNodeExecutor``) or ``"external"`` in a subprocess under the
+    Python environment at ``executor_env_path`` (an
+    ``ExternalNodeExecutor``). ``pull_executor`` copies it, and
+    ``apply_executor`` sets it as the editor's Apply does.
     """
 
     entry_name = Sync(str)
     parameters = Sync(OperatorParameters | None, None, has_dataclass=True)
     parameters_dirty = Sync(bool, False)  # the mirror differs from the node
     definition = Sync(dict, dict)
+    executor_type = Sync(str, "")  # "" (internal) or "external"
+    executor_env_path = Sync(str, "")  # the external environment's root
 
     def __init__(self, server, **kwargs):
         self._parameter_names: list[str] = []
@@ -197,6 +206,43 @@ class DataNodeModel(NodeModel):
         except ValueError:
             logger.error("'{}' has a definition that is not JSON", node.label)
             self.definition = {}
+
+    def pull_executor(self):
+        """Copy where the node runs into ``executor_type`` and
+        ``executor_env_path``."""
+        executor = None if self.node is None else self.node.node_executor
+        self.executor_type = getattr(executor, "type_name", "") or ""
+        self.executor_env_path = getattr(executor, "env_path", "") or ""
+
+    def apply_executor(self, executor_type: str, env_path: str = "") -> bool:
+        """Run the node in the application (``executor_type`` ``""``) or
+        externally under the environment at ``env_path`` (``"external"``).
+        An external executor already there gets the new path in place, so a
+        cancel still reaches the subprocess it may be running. Nothing runs:
+        a change marks the node stale (desktop parity), and the caller
+        re-executes. Returns whether anything changed."""
+        node = self.node
+        if node is None:
+            return False
+        current = node.node_executor
+        if executor_type == ExternalNodeExecutor.type_name:
+            if isinstance(current, ExternalNodeExecutor):
+                changed = current.env_path != env_path
+                current.env_path = env_path
+            else:
+                node.node_executor = ExternalNodeExecutor(env_path)
+                changed = True
+        elif not executor_type:
+            changed = current is not None
+            node.node_executor = None
+        else:
+            msg = f"unknown executor type '{executor_type}'"
+            raise ValueError(msg)
+
+        if changed:
+            node.mark_stale()
+        self.pull_executor()
+        return changed
 
     def apply_edits(self, definition: dict, script: str) -> list[str]:
         """Give the node a new ``definition`` and ``script``, and update

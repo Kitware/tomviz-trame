@@ -1,5 +1,6 @@
 from pathlib import Path
 
+from loguru import logger
 from trame.widgets import html
 from trame.widgets import vuetify3 as v3
 
@@ -51,17 +52,25 @@ class FileBrowser:
         self._enable_groups = v
 
     @property
+    def current_path(self):
+        return self._current_path
+
+    @property
     def listing(self):
         directories = []
         files = []
         for f in self._current_path.iterdir():
             if f.name[0] == ".":
                 continue
-            entry = {"name": f.name, "modified": f.stat().st_mtime}
+            try:
+                stat = f.stat()
+            except OSError:  # a broken symlink
+                continue
+            entry = {"name": f.name, "modified": stat.st_mtime}
             if f.is_dir():
                 directories.append({**entry, **DIRECTORY})
             elif f.is_file():
-                files.append({**entry, **FILE, "size": f.stat().st_size})
+                files.append({**entry, **FILE, "size": stat.st_size})
 
         # Sort content
         directories.sort(key=sort_by_name)
@@ -78,6 +87,9 @@ class FileBrowser:
             files = entry.get("files", [])
             return entry, [str(self._current_path / f) for f in files]
         return None
+
+    def goto(self, path):
+        self._current_path = Path(path).resolve()
 
     def goto_home(self):
         self._current_path = self._home_path
@@ -96,27 +108,58 @@ class FileBrowser:
 
 
 class FileLoader(v3.VDialog):
+    """A dialog browsing the server's filesystem with a ``FileBrowser``.
+
+    By default it is the toolbar's Open dialog: it loads a data file or a
+    state file. ``on_select(path)`` replaces what is done with the chosen
+    file, and ``extensions`` which files can be chosen. With ``directory``
+    it picks a folder instead: only folders are listed, the current path is
+    shown, and the confirm button takes the highlighted folder, or the
+    current one when none is.
+
+    Each instance keeps its state under its own ``name`` prefix;
+    ``{name}_loader`` shows it, and ``open(start)`` shows it at a folder.
+    """
+
     def __init__(
         self,
+        name="tomviz_file",
+        title="Open Data File",
+        confirm="Load",
+        confirm_icon="mdi-file-upload-outline",
+        extensions=None,
+        directory=False,
+        on_select=None,
         **_,
     ):
-        super().__init__(v_model=("tomviz_file_loader", False))
+        self._name = name
+        self._directory = directory
+        self._on_select = on_select or self._open_data
+        super().__init__(v_model=(self._key("loader"), False))
 
         # What the reader node can open, plus state files
-        self._file_ext = (*SUPPORTED_EXTENSIONS, *STATE_EXTENSIONS)
+        self._file_ext = (
+            tuple(extensions)
+            if extensions is not None
+            else (*SUPPORTED_EXTENSIONS, *STATE_EXTENSIONS)
+        )
 
-        # Initialize file browser
-        self._file_browser = FileBrowser(current=Path.cwd())
+        # Initialize file browser (a folder pick starts at home)
+        self._file_browser = FileBrowser(current=None if directory else Path.cwd())
 
         # Fill content
         self._update_listing()
         self.selected_entry = None
 
         # Define UI
-        with self, v3.VCard(rounded="lg"):
+        # Sized like the node editor dialog.
+        with (
+            self,
+            v3.VCard(rounded="lg", classes="mx-auto", max_width="1000px", width="80vw"),
+        ):
             style_align_center = "d-flex align-center "
             with v3.VToolbar(density="compact", classes="bg-surface"):
-                v3.VToolbarTitle("Open Data File", style="flex: none;")
+                v3.VToolbarTitle(title, style="flex: none;")
                 v3.VDivider(classes="mx-3", vertical=True)
                 v3.VBtn(
                     icon="mdi-home",
@@ -133,7 +176,7 @@ class FileLoader(v3.VDialog):
                     click=self.goto_parent,
                 )
                 v3.VTextField(
-                    v_model=("tomviz_file_filter", ""),
+                    v_model=(self._key("filter"), ""),
                     hide_details=True,
                     color="primary",
                     placeholder="filter",
@@ -143,17 +186,22 @@ class FileLoader(v3.VDialog):
                     prepend_inner_icon="mdi-magnify",
                     clearable=True,
                 )
+            if directory:
+                html.Div(
+                    f"{{{{ {self._key('path')} }}}}",
+                    classes="text-caption text-medium-emphasis px-4 py-1 text-truncate",
+                )
             v3.VDivider()
             with v3.VDataTable(
                 density="compact",
                 fixed_header=True,
                 classes="bg-surface-light",
-                headers=("tomviz_file_headers", HEADERS),
-                items=("tomviz_file_listing", []),
+                headers=(self._key("headers"), HEADERS),
+                items=(self._key("listing"), []),
                 height="50vh",
                 style="user-select: none; cursor: pointer;",
                 hover=True,
-                search=("tomviz_file_filter",),
+                search=(self._key("filter"),),
                 items_per_page=-1,
             ):
                 v3.Template(raw_attrs=["v-slot:bottom"])
@@ -164,7 +212,8 @@ class FileLoader(v3.VDialog):
                         click=(self.select_entry, "[item]"),
                         dblclick=(self.open_entry, "[item]"),
                         classes=(
-                            "{ 'bg-grey': item.index === tomviz_file_active, 'cursor-pointer': 1 }",
+                            f"{{ 'bg-grey': item.index === {self._key('active')}, "
+                            "'cursor-pointer': 1 }",
                         ),
                     ):
                         with v3.Template(raw_attrs=["v-slot:item.name"]):
@@ -196,15 +245,16 @@ class FileLoader(v3.VDialog):
 
             with v3.VCardActions(classes="pt-3"):
                 v3.VBtn(
-                    "Load",
-                    prepend_icon="mdi-file-upload-outline",
+                    confirm,
+                    prepend_icon=confirm_icon,
                     color="primary",
                     variant="flat",
                     classes="mr-3 text-none",
-                    disabled=("tomviz_file_open_disabled", True),
+                    # A folder pick falls back to the current folder.
+                    disabled=(self._key("open_disabled"), not directory),
                     click=(
-                        self.open_dataset,
-                        "[tomviz_file_listing[tomviz_file_active]]",
+                        self.confirm,
+                        f"[{self._key('listing')}[{self._key('active')}]]",
                     ),
                 )
                 v3.VBtn(
@@ -212,14 +262,41 @@ class FileLoader(v3.VDialog):
                     classes="text-none",
                     color="accent",
                     variant="tonal",
-                    click="tomviz_file_loader = false",
+                    click=f"{self._key('loader')} = false",
                 )
                 v3.VSpacer()
 
+    def _key(self, suffix):
+        return f"{self._name}_{suffix}"
+
     def _update_listing(self):
         self.selected_entry = None
-        self.state.tomviz_file_active = -1
-        self.state.tomviz_file_listing = self._file_browser.listing
+        try:
+            listing = self._file_browser.listing
+        except OSError as error:
+            logger.warning("Cannot list {}: {}", self._file_browser.current_path, error)
+            listing = []
+        if self._directory:
+            listing = [
+                {**e, "index": i}
+                for i, e in enumerate(e for e in listing if to_type(e) == "directory")
+            ]
+        self.state[self._key("active")] = -1
+        self.state[self._key("open_disabled")] = not self._directory
+        self.state[self._key("listing")] = listing
+        self.state[self._key("path")] = str(self._file_browser.current_path)
+
+    def open(self, start=None):
+        """Show the dialog, in the folder ``start`` when it is one (the
+        folder holding it when it is a file)."""
+        if start:
+            path = Path(start).expanduser()
+            if path.is_file():
+                path = path.parent
+            if path.is_dir():
+                self._file_browser.goto(path)
+        self._update_listing()
+        self.state[self._key("loader")] = True
 
     def goto_home(self):
         self._file_browser.goto_home()
@@ -231,27 +308,41 @@ class FileLoader(v3.VDialog):
 
     def select_entry(self, entry):
         self.selected_entry = entry
-        self.state.tomviz_file_active = entry.get("index", 0) if entry else -1
-        self.state.tomviz_file_open_disabled = True
+        self.state[self._key("active")] = entry.get("index", 0) if entry else -1
+        if self._directory:
+            return
 
         # Update button state
-        if (
+        self.state[self._key("open_disabled")] = not (
             entry
             and to_type(entry) in ["file", "group"]
             and to_suffix(entry) in self._file_ext
-        ):
-            self.state.tomviz_file_open_disabled = False
+        )
 
     def open_entry(self, entry):
         if to_type(entry) == "directory":
             self._file_browser.open_entry(entry)
             self._update_listing()
-        else:
-            self.open_dataset(entry)
+        elif not self._directory:
+            self.confirm(entry)
 
-    def open_dataset(self, entry):
-        self.state.tomviz_file_loader = False
-        file_to_load = self._file_browser.to_file(entry)
+    def confirm(self, entry):
+        """Close and hand the chosen path to ``on_select``: the file
+        ``entry``, or for a folder pick the folder ``entry`` (the current
+        folder without one)."""
+        if self._directory:
+            if entry and to_type(entry) == "directory":
+                path = self._file_browser.to_file(entry)
+            else:
+                path = self._file_browser.current_path
+        elif entry:
+            path = self._file_browser.to_file(entry)
+        else:
+            return
+        self.state[self._key("loader")] = False
+        self._on_select(path)
+
+    def _open_data(self, file_to_load):
         if self.ctx.pipeline.is_state_file(file_to_load):
             self.ctx.pipeline.load_state_file_later(file_to_load)
         else:
