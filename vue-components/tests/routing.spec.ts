@@ -159,3 +159,31 @@ describe('every fixture', () => {
     }
   })
 })
+
+describe('a partially synced pipeline', () => {
+  // trame-dataclass delivers a nested instance as an empty object first, then
+  // its own fields, and its nested lists (inputs, outputs) only once their
+  // instances have been fetched: a link can reach a node that has no ports yet.
+  function partial() {
+    const nodes = linear()
+    const source = byLabel(nodes, 'sample.vti') as Partial<NodeData>
+    delete source.outputs
+    const placeholder = {} as NodeData
+    return { nodes: [...nodes, placeholder], source: source as NodeData }
+  }
+
+  it('leaves the unresolved nodes out until they are complete', () => {
+    const { nodes, source } = partial()
+    const graph = buildGraph(nodes)
+    expect(graph.nodes).toHaveLength(nodes.length - 2)
+    expect(graph.byId.has(source._id)).toBe(false)
+    expect(graph.links.some((l) => l.from === source)).toBe(false)
+  })
+
+  it('lays out and routes what is there', () => {
+    const { nodes } = partial()
+    const { routing, between } = route(nodes)
+    expect(routing.links.length).toBeGreaterThan(0)
+    expect(between('Gaussian Filter', 'Threshold').direct).toBe(true)
+  })
+})

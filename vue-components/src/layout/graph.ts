@@ -57,11 +57,23 @@ function push<K, V>(map: Map<K, V[]>, key: K, value: V) {
 }
 
 /**
+ * Whether the client has a node in full. trame-dataclass delivers a nested
+ * instance as an empty object, then its own fields, and its nested lists
+ * (`inputs`, `outputs`) once their instances have been fetched.
+ */
+function isResolved(node: NodeData | undefined): boolean {
+  if (!node?._id || !Array.isArray(node.inputs) || !Array.isArray(node.outputs)) return false
+  return node.inputs.every((p) => p?._id) && node.outputs.every((p) => p?._id)
+}
+
+/**
  * Index a node list. Links are derived from the inputs: an input's `link` is
  * the output port feeding it, whose `node` must be in the list for the link to
- * count (a reference the client has not resolved yet is ignored).
+ * count. What the client has not resolved yet is ignored: nodes still missing
+ * their ports, and the links to and from them.
  */
-export function buildGraph(nodes: NodeData[]): Graph {
+export function buildGraph(all: NodeData[]): Graph {
+  const nodes = all.filter(isResolved)
   const byId = new Map<string, NodeData>()
   for (const node of nodes) byId.set(node._id, node)
 
@@ -70,7 +82,7 @@ export function buildGraph(nodes: NodeData[]): Graph {
   const incoming = new Map<string, Link[]>()
   const outgoingByPort = new Map<string, Link[]>()
   for (const to of nodes) {
-    for (const input of to.inputs || []) {
+    for (const input of to.inputs) {
       const output = input.link
       const from = output?.node ? byId.get(output.node._id) : undefined
       if (!output || !from) continue
