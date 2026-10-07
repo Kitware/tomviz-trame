@@ -6,13 +6,21 @@ re-executes; an edit the library refuses leaves the node untouched.
 
 A new node waits for the editor before it runs: OK runs it, Cancel removes
 it and puts the graph back without re-running anything. A node with more
-inputs waits once its last input is linked, and Cancel removes that link."""
+inputs waits once its last input is linked, and Cancel removes that link.
+
+The Execution tab moves a node to an external Python environment (the one
+the tests run in, a real one) and back, checking the environment picked
+through the folder browser."""
 
 import asyncio
 import json
+import os
+import sys
+from pathlib import Path
 
 import numpy as np
-from tomviz_pipeline import SinkGroupNode
+import pytest
+from tomviz_pipeline import ExternalNodeExecutor, SinkGroupNode
 from tomviz_pipeline.dataset import Dataset
 from tomviz_pipeline.writers import write_emd
 
@@ -54,6 +62,15 @@ async def wait_idle(manager):
             break
         await asyncio.sleep(0.05)
     await asyncio.sleep(0.3)
+
+
+async def wait_for(predicate, timeout=60.0):
+    """Poll until ``predicate()`` holds; whether it did."""
+    for _ in range(int(timeout / 0.05)):
+        if predicate():
+            return True
+        await asyncio.sleep(0.05)
+    return predicate()
 
 
 def scalars(model):
@@ -316,6 +333,122 @@ async def run_pending_session(volume_file, other_file):
         serve.cancel()
 
 
+async def run_execution_session(volume_file, settings_file, folder, external_runs):
+    from tomviz_web.app.core import Tomviz
+
+    app = Tomviz(server="execution-session")
+    server = app.server
+    serve = asyncio.create_task(
+        server.start(exec_mode="coroutine", port=0, open_browser=False, timeout=0)
+    )
+    await asyncio.sleep(0.5)
+    manager = app.ctx.pipeline
+    dialog = app.ctx.transform_editor
+    editor = dialog.editor
+    picker = dialog.env_picker
+    env_root = os.path.normpath(sys.prefix)
+
+    async def idle():
+        await wait_for(lambda: not manager.pipeline.is_executing())
+        await asyncio.sleep(0.3)
+
+    try:
+        manager.load_file(volume_file)
+        await idle()
+        scale = data_model.get_instance(manager.add_transform("Scale"))
+        await idle()
+
+        # A node runs internally until told otherwise: nothing to check.
+        dialog.open(scale._id)
+        assert (editor.executor, editor.env_path) == ("", "")
+        assert scale.executor_type == ""
+        await asyncio.sleep(0.6)
+        assert editor.env_status == ""
+
+        # The environment is checked as it is typed...
+        editor.executor = "external"
+        editor.env_path = str(folder)
+        assert await wait_for(lambda: editor.env_status == "problem")
+        assert "not a Python environment" in editor.env_message
+
+        # ...or picked: the folder browser lists folders only, and Select
+        # takes the highlighted one, or the current one.
+        picker.open(folder)
+        assert server.state.tomviz_env_loader
+        assert server.state.tomviz_env_path == str(folder.resolve())
+        listing = server.state.tomviz_env_listing
+        assert [e["name"] for e in listing] == ["sub"]
+        picker.select_entry(listing[0])
+        picker.confirm(listing[0])
+        assert not server.state.tomviz_env_loader
+        assert editor.env_path == str(folder.resolve() / "sub")
+        env_bin = Path(sys.prefix) / "bin"
+        picker.open(env_bin)
+        picker.confirm(None)
+        assert editor.env_path == str(env_bin.resolve())
+
+        # A pick of <env>/bin is shown as the environment's root.
+        editor.env_path = str(env_bin)
+        assert await wait_for(lambda: editor.env_status == "ok")
+        assert editor.env_path == env_root
+        assert "compatible" in editor.env_message
+        assert not scale.node.node_executor
+
+        # OK moves the node there, re-runs it in a subprocess, and remembers
+        # the environment for the transform.
+        dialog.ok()
+        assert isinstance(scale.node.node_executor, ExternalNodeExecutor)
+        assert scale.node.node_executor.env_path == env_root
+        assert (scale.executor_type, scale.executor_env_path) == ("external", env_root)
+        assert editor.message_type == "success"
+        assert server.state.external_env_paths == {"Scale": env_root}
+        await idle()
+        assert external_runs == [(scale.node.id, True)]
+        assert scale.state == "Current"
+        np.testing.assert_allclose(scalars(scale), ramp() * 2.0)
+        server.state.flush()
+        saved = json.loads(settings_file.read_text())
+        assert saved["external_env_paths"] == {"Scale": env_root}
+
+        # A new node of the same transform starts with that environment,
+        # still running internally.
+        other = data_model.get_instance(manager.add_transform("Scale", pending=True))
+        dialog.open(other._id)
+        assert (editor.executor, editor.env_path) == ("", env_root)
+        dialog.cancel()
+
+        # Back to internal: the node re-runs in the application.
+        dialog.open(scale._id)
+        assert (editor.executor, editor.env_path) == ("external", env_root)
+        editor.executor = ""
+        dialog.ok()
+        assert scale.node.node_executor is None
+        assert scale.executor_type == ""
+        await idle()
+        assert len(external_runs) == 1
+        assert scale.state == "Current"
+        np.testing.assert_allclose(scalars(scale), ramp() * 2.0)
+
+        # An externalOnly transform cannot run internally, and says what
+        # is missing without an environment.
+        only = data_model.get_instance(
+            manager.add_transform("ExternalScale", pending=True)
+        )
+        dialog.open(only._id)
+        assert (editor.executor, editor.env_path) == ("external", "")
+        editor.executor = ""
+        assert dialog.apply()
+        assert editor.executor == "external"
+        assert isinstance(only.node.node_executor, ExternalNodeExecutor)
+        assert editor.message_type == "warning"
+        assert "Python environment" in editor.message
+        await idle()
+    finally:
+        manager.shutdown()
+        await server.stop()
+        serve.cancel()
+
+
 def test_new_nodes_wait_for_the_editor(tmp_path, monkeypatch):
     kernels = tmp_path / "kernels"
     kernels.mkdir()
@@ -355,3 +488,42 @@ def test_editing_a_catalog_node(tmp_path, monkeypatch):
     volume = tmp_path / "volume.emd"
     write_emd(Dataset({"scalars": ramp()}), volume)
     asyncio.run(run_session(volume))
+
+
+@pytest.mark.skipif(os.name == "nt", reason="external execution is POSIX-only here")
+def test_choosing_where_a_node_runs(tmp_path, monkeypatch):
+    kernels = tmp_path / "kernels"
+    kernels.mkdir()
+    (kernels / "Scale.json").write_text(json.dumps(SCALE_DEFINITION))
+    (kernels / "Scale.py").write_text(SCALE_SCRIPT)
+    external_only = {
+        **SCALE_DEFINITION,
+        "name": "ExternalScale",
+        "label": "External Scale",
+        "externalOnly": True,
+    }
+    (kernels / "ExternalScale.json").write_text(json.dumps(external_only))
+    (kernels / "ExternalScale.py").write_text(SCALE_SCRIPT)
+
+    catalog = tmp_path / "catalog.json"
+    catalog.write_text(
+        json.dumps({"directories": [str(kernels)], "modules": [], "favorites": []})
+    )
+    settings = tmp_path / "settings.json"
+    monkeypatch.setenv("TRAME_ARGS", f"--catalog {catalog} --settings {settings}")
+    volume = tmp_path / "volume.emd"
+    write_emd(Dataset({"scalars": ramp()}), volume)
+    folder = tmp_path / "browse"
+    (folder / "sub").mkdir(parents=True)
+    (folder / "file.txt").write_text("not listed")
+
+    external_runs = []
+    execute = ExternalNodeExecutor.execute
+
+    def record(self, node):
+        ok = execute(self, node)
+        external_runs.append((node.id, ok))
+        return ok
+
+    monkeypatch.setattr(ExternalNodeExecutor, "execute", record)
+    asyncio.run(run_execution_session(volume, settings, folder, external_runs))

@@ -336,9 +336,9 @@ class PipelineManager(TrameComponent):
 
     def _track(self, model: data_model.NodeModel):
         """Register a model whose node is already in the graph and linked:
-        mirror its ports, pull its state (and a catalog node's script and
-        definition), and follow its signals. Consumers tracked earlier get
-        their ``link`` resolved now."""
+        mirror its ports, pull its state (and a catalog node's script,
+        definition and executor), and follow its signals. Consumers tracked
+        earlier get their ``link`` resolved now."""
         node = model.node
         if not model.outputs:
             model.outputs = [
@@ -351,6 +351,7 @@ class PipelineManager(TrameComponent):
         model.pull_state()
         if isinstance(model, data_model.DataNodeModel):
             model.pull_definition()
+            model.pull_executor()
         self._connect_node(model)
         self.node_models[node.id] = model
         self.model.add(model)

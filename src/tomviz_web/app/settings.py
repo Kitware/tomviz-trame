@@ -23,6 +23,10 @@ PERSISTED = {
     # The user's volume lighting presets, as the desktop stores them
     # (LightingPresetStore): [{"name", "shade", "ambient", ...}, ...]
     "volume_lighting_presets": [],
+    # The Python environment last applied for external execution, per
+    # definition name (the desktop's externalEnvPaths/<name>): a new node of
+    # that transform starts with it. {"SAM2Segment3D": "/path/to/env", ...}
+    "external_env_paths": {},
 }
 
 
