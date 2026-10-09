@@ -18,6 +18,7 @@ from tomviz_pipeline import (
     Pipeline,
     PipelineSettings,
     SinkGroupNode,
+    SinkNode,
     ThreadedExecutor,
     TransformPersistenceDefault,
 )
@@ -36,7 +37,11 @@ from tomviz_web.app.pipeline.nodes import (
     register_nodes,
 )
 from tomviz_web.app.pipeline.representations import RepresentationType
-from tomviz_web.app.pipeline.state import STATE_EXTENSIONS, load_state_file
+from tomviz_web.app.pipeline.state import (
+    STATE_EXTENSIONS,
+    load_state_file,
+    save_state_file,
+)
 
 
 @dataclass
@@ -119,6 +124,13 @@ class PipelineManager(TrameComponent):
         self.tip_port: OutputPort | None = None
         self._selected_node: Node | None = None
 
+        # State files: the last one loaded or saved, the loaded file's
+        # top-level sections the session writes back as they were, and the
+        # dock's arrangement as the client last reported it.
+        self.state_path: Path | None = None
+        self.state_extras: dict = {}
+        self.dock_layout: dict | None = None
+
         self.model = data_model.PipelineModel(self.server)
         self.attach_pipeline(Pipeline())
         self.state.property_templates = []
@@ -132,6 +144,7 @@ class PipelineManager(TrameComponent):
         self.state.pipeline_executing = False
         self.state.pipeline_paused = False
         self.state.pipeline_stopping = False
+        self.state.state_saving = False
         self.state.transform_persistence_default = (
             PipelineSettings.instance().transform_persistence_default.value
         )
@@ -249,6 +262,7 @@ class PipelineManager(TrameComponent):
         self._awaiting_links.clear()
         self.set_tip_port(None)
         self.pipeline.clear()
+        self.state_extras = {}
 
     def run_on_loop(self, callback: Callable[[], None]):
         """Run ``callback`` on the application's event loop from any thread.
@@ -656,14 +670,53 @@ class PipelineManager(TrameComponent):
 
     async def load_state_file(self, file_path: str | Path):
         """Replace the session with a ``.tvsm`` / ``.tvh5`` state file."""
+        if self.state.state_saving:
+            logger.error("Cannot load a state file while one is being saved")
+            return
         try:
             await load_state_file(self, file_path)
         except Exception:
             logger.exception("Cannot load state file {}", file_path)
+        else:
+            self.state_path = Path(file_path)
 
     def load_state_file_later(self, file_path: str | Path):
         """Schedule ``load_state_file`` from synchronous code (UI callbacks)."""
         asynchronous.create_task(self.load_state_file(file_path))
+
+    async def save_state_file(self, file_path: str | Path) -> bool:
+        """Save the session to a ``.tvsm`` / ``.tvh5`` state file. Refused
+        while the pipeline runs, since the payloads would change under the
+        writer; while the file is written, ``state_saving`` locks the UI's
+        graph edits for the same reason. Returns whether the file was
+        written."""
+        if self.state.state_saving:
+            return False
+        if self.pipeline.is_executing():
+            logger.error("Cannot save the state while the pipeline is running")
+            return False
+        with self.state:
+            self.state.state_saving = True
+        try:
+            await save_state_file(self, file_path)
+        except Exception:
+            logger.exception("Cannot save state file {}", file_path)
+            return False
+        finally:
+            with self.state:
+                self.state.state_saving = False
+        self.state_path = Path(file_path)
+        logger.info("Saved the state to {}", file_path)
+        return True
+
+    def save_state_file_later(self, file_path: str | Path):
+        """Schedule ``save_state_file`` from synchronous code (UI callbacks)."""
+        asynchronous.create_task(self.save_state_file(file_path))
+
+    def on_layout_changed(self, layout: dict):
+        """The dock's arrangement, as dockview reports it after every change
+        (saved as the state file's layout)."""
+        self.dock_layout = layout
 
     # -------------------------------------------------------------------------
     # Views
@@ -723,6 +776,17 @@ class PipelineManager(TrameComponent):
 
         for sink_model in [m for m in self._sink_models() if m.view._id == view_id]:
             self.remove_sink(sink_model.node.id)
+        # The sinks the app cannot show go with the view they were saved in
+        state_id = view.local_state.state_id
+        for model in [
+            m
+            for m in self.node_models.values()
+            if isinstance(m.node, SinkNode)
+            and not isinstance(m, data_model.SinkNodeModel)
+            and state_id is not None
+            and getattr(m.node, "settings", {}).get("viewId") == state_id
+        ]:
+            self.remove_node(model._id)
 
         view.vtk_view.finalize()
         self.ctx.dock_view.remove_panel(view.vtk_id)
@@ -1221,7 +1285,7 @@ class PipelineManager(TrameComponent):
         ``{id, title, icon, disabled, checked}``; empty when there is
         nothing to offer."""
         target = data_model.get_instance(target_id) if target_id else None
-        executing = self.pipeline.is_executing()
+        executing = self.pipeline.is_executing() or self.state.state_saving
 
         def action(action_id, title, icon, disabled=False, checked=False):
             return {

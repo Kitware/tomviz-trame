@@ -31,6 +31,10 @@ class RepresentationSinkNode(SinkNode):
     ``prepare``); applying it to the actors and
     updating trame state happens in ``apply``, which the ``dispatch`` callable
     schedules on the application's event loop.
+
+    ``serialize`` writes the model's settings in the desktop's vocabulary
+    (``state.sink_settings``) over ``settings``, the entry the sink was
+    loaded from, so keys the app does not restore are saved as they were.
     """
 
     executable = True
@@ -48,6 +52,7 @@ class RepresentationSinkNode(SinkNode):
         self.label = representation_type.label
         self.representation_type = representation_type
         self.view = view
+        self.settings: dict = {}  # the loaded entry's sink keys
         self._dispatch = dispatch
         self._has_data = False
         self.add_input(INPUT_PORT, list(representation_type.port_types))
@@ -58,6 +63,14 @@ class RepresentationSinkNode(SinkNode):
         self.model: data_model.SinkNodeModel = self.representation.model
         self.model.node = self
         self.model.type_name = self.type_name
+
+    def serialize(self) -> dict:
+        # Imported here: the state module imports this one.
+        from tomviz_web.app.pipeline.state import sink_settings
+
+        data = sink_settings(self)
+        data.update(super().serialize())
+        return data
 
     def consume(self, inputs: dict[str, PortData]) -> bool:
         data = inputs[INPUT_PORT]

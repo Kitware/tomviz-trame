@@ -2,8 +2,8 @@ version = 1
 revision = 3
 requires-python = ">=3.11"
 resolution-markers = [
-    "python_full_version == '3.13.*'",
     "python_full_version >= '3.15'",
+    "python_full_version == '3.13.*'",
     "python_full_version == '3.12.*' or python_full_version == '3.14.*'",
     "python_full_version < '3.12'",
 ]
@@ -1298,8 +1298,8 @@ name = "numpy"
 version = "2.5.2"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version == '3.13.*'",
     "python_full_version >= '3.15'",
+    "python_full_version == '3.13.*'",
     "python_full_version == '3.12.*' or python_full_version == '3.14.*'",
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/9a/80/db0b4559e57ec36362bedbb05530a87fafbcb6067708c946967a41d449e7/numpy-2.5.2.tar.gz", hash = "sha256:d482d171c406ae88c5b19cad3b6a1c4c5209f886ab74bc44c2c865c23f52d860", size = 20773161, upload-time = "2026-08-09T13:48:27.962Z" }
@@ -1940,7 +1940,7 @@ resolution-markers = [
     "python_full_version < '3.12'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
+    { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7a/97/5a3609c4f8d58b039179648e62dd220f89864f56f7357f5d4f45c29eb2cc/scipy-1.17.1.tar.gz", hash = "sha256:95d8e012d8cb8816c226aef832200b1d45109ed4464303e997c5b13122b297c0", size = 30573822, upload-time = "2026-02-23T00:26:24.851Z" }
 wheels = [
@@ -2011,12 +2011,12 @@ name = "scipy"
 version = "1.18.1"
 source = { registry = "https://pypi.org/simple" }
 resolution-markers = [
-    "python_full_version == '3.13.*'",
     "python_full_version >= '3.15'",
+    "python_full_version == '3.13.*'",
     "python_full_version == '3.12.*' or python_full_version == '3.14.*'",
 ]
 dependencies = [
-    { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" } },
 ]
 sdist = { url = "https://files.pythonhosted.org/packages/7e/74/66de6258867beb2ef08f35f9f2ac017a52cacd5081714d239ff1a442d458/scipy-1.18.1.tar.gz", hash = "sha256:52c4b7422442aba924d03ad4019852b08a92e64ea187b933135687bfe2747307", size = 30781235, upload-time = "2026-08-21T23:28:50.599Z" }
 wheels = [
@@ -2156,7 +2156,7 @@ wheels = [
 
 [[package]]
 name = "tomviz-pipeline"
-version = "3.2.0"
+version = "3.2.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "click" },
@@ -2165,14 +2165,14 @@ dependencies = [
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "tqdm" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/d2/5c/58ac86b78b026c6a172bfa34e21b5f9070835df5ee76b2398ff2324f17de/tomviz_pipeline-3.2.0.tar.gz", hash = "sha256:1eb3a92c77767d3209b6865edc6f2f7447282e19a19a278aa99150d12ddd1660", size = 173776, upload-time = "2026-10-02T20:24:03.856Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d0/e0/5ece63082e853712010e1b3df58c7b53022ea4c637a24b07f526055f2416/tomviz_pipeline-3.2.1.tar.gz", hash = "sha256:ba6956e01b53c023d33ea219b57e2b37b929b0a24e5c91d864184e0e05ea9a9b", size = 179394, upload-time = "2026-10-09T19:46:01.538Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2d/3e/51e14183e5b558303b241d226ad6fee6aba96c28ecdbdb8032dce8596e05/tomviz_pipeline-3.2.0-py3-none-any.whl", hash = "sha256:6c8b86f671ebdabfb197f88035616f9f8ab49a8cdef31f26898253099cd14cbb", size = 146227, upload-time = "2026-10-02T20:24:02.357Z" },
+    { url = "https://files.pythonhosted.org/packages/35/5f/d2b6e1e534abfca2e2c118b5bec2deec38bf476ead7cd4de951e6161027f/tomviz_pipeline-3.2.1-py3-none-any.whl", hash = "sha256:25cc1f97f5e80faad5b851db87d61a56b03516f1a38fd24a18366eb532242149", size = 148964, upload-time = "2026-10-09T19:46:00.088Z" },
 ]
 
 [[package]]
 name = "tomviz-web"
-version = "1.0.0"
+version = "1.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "loguru" },
@@ -2214,7 +2214,7 @@ requires-dist = [
     { name = "ruff", marker = "extra == 'dev'" },
     { name = "scipy", specifier = ">=1.17.1" },
     { name = "tomviz-kernels", specifier = ">=3.2.0" },
-    { name = "tomviz-pipeline", specifier = ">=3.2.0" },
+    { name = "tomviz-pipeline", specifier = ">=3.2.1" },
     { name = "trame", specifier = ">=4" },
     { name = "trame-code", specifier = ">=1.1.1" },
     { name = "trame-color-opacity-editor" },

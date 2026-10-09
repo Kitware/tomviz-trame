@@ -21,28 +21,47 @@ Desktop specifics handled here:
 - Slice ``direction`` is XY 0, YZ 1, XZ 2, Custom 3 (``planeCenter`` and
   ``planeNormal`` place a Custom plane); ``activeScalars`` may be the
   sentinel ``tomviz::DefaultScalars``.
+
+Saving is the inverse, and the library writes the file (``build_state`` on
+the event loop, ``write_state`` in a thread): each ``RepresentationSinkNode``
+serializes its settings (``sink_settings``, the ``*_entry`` functions undo
+the ``*_settings`` loaders), the ports' color maps, active arrays and label
+tables go into the library's ``port.metadata``, and the views and their
+layout are the extra top-level sections. What the session does not
+understand is written back as it was loaded: a sink's keys the loader does
+not restore (``sink.settings``), a port's other metadata, inert sinks
+(their ``settings`` in the library) and unknown top-level sections; the
+desktop's ``animation`` is dropped (it refers to sinks by id).
 """
 
 from __future__ import annotations
 
 import asyncio
+import copy
 import json
+import math
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from loguru import logger
-from tomviz_pipeline import Pipeline, SinkGroupNode, SinkNode, TransformNode
-from tomviz_pipeline.state import load_state, read_state_json
+from tomviz_pipeline import (
+    PassthroughOutputPort,
+    Pipeline,
+    SinkGroupNode,
+    SinkNode,
+    TransformNode,
+)
+from tomviz_pipeline.state import build_state, load_state, read_state_json, write_state
 
 from tomviz_web.app import data_model
 from tomviz_web.app.parameters_gui import to_parameters_model
 from tomviz_web.app.pipeline.graph import data_port_of, is_data_node, primary_upstream
-from tomviz_web.app.pipeline.layout import dockview_layout
+from tomviz_web.app.pipeline.layout import VIEW_SERVERS, dockview_layout, layout_entry
 from tomviz_web.app.pipeline.nodes import INPUT_PORT, RepresentationSinkNode
 from tomviz_web.app.pipeline.representations import RepresentationType
 from tomviz_web.app.pipeline.representations.slice import THICK_SLICE_MODES
 from tomviz_web.app.pipeline.representations.volume import BLEND_MODES
-from tomviz_web.app.utils.colors import rgb_to_hex
+from tomviz_web.app.utils.colors import hex_to_rgb, rgb_to_hex
 from tomviz_web.app.utils.volume import EXPLODED_AXES
 
 if TYPE_CHECKING:
@@ -480,6 +499,13 @@ def apply_state(manager: PipelineManager, pipeline: Pipeline, raw: dict):
     entries = {entry["id"]: entry for entry in raw.get("pipeline", {}).get("nodes", [])}
 
     manager.reset()
+    manager.state_extras = {
+        key: copy.deepcopy(value)
+        for key, value in raw.items()
+        if key not in SESSION_SECTIONS
+    }
+    if raw.get("animation"):
+        logger.info("The state file's animation is not restored")
     views = create_views(manager, raw)
     manager.attach_pipeline(pipeline)
     build_node_models(manager, pipeline, entries)
@@ -516,6 +542,8 @@ def create_views(
             )
         if "id" in entry:
             views[entry["id"]] = view
+            # Kept for saving, so the inert sinks' viewId still names it
+            view.state_id = int(entry["id"])
         if entry.get("active") or active_view_id is None:
             active_view_id = view_id
     manager.state.active_view_id = active_view_id
@@ -612,15 +640,15 @@ def build_node_models(manager: PipelineManager, pipeline: Pipeline, entries: dic
             model.bind_parameters()
             manager._track(model)
 
-        apply_port_metadata(model, entry)
+        apply_port_metadata(model)
         manager.describe_ports(model)
 
 
-def apply_port_metadata(model: data_model.DataNodeModel, entry: dict):
-    """Color maps and active scalars saved on the node's output ports."""
-    ports = entry.get("outputPorts", {}) or {}
+def apply_port_metadata(model: data_model.DataNodeModel):
+    """Color maps and active scalars saved on the node's output ports (the
+    library loads each port's ``metadata``)."""
     for port_model in model.outputs:
-        metadata = (ports.get(port_model.name) or {}).get("metadata") or {}
+        metadata = port_model.port.metadata if port_model.port is not None else {}
         ignored = sorted(k for k in metadata if k not in PORT_METADATA_KEYS)
         if ignored:
             logger.info(
@@ -707,6 +735,7 @@ def replace_sinks(
             representation_type, manager, port_model, view, manager.run_on_loop
         )
         sink.id = placeholder.id
+        sink.settings = dict(getattr(placeholder, "settings", {}))
         pipeline.remove_node(placeholder)
         pipeline.add_node(sink)
         pipeline.create_link(upstream, sink.input_port(INPUT_PORT))
@@ -750,3 +779,354 @@ def apply_sink_settings(model, representation_type: RepresentationType, entry: d
     if color_by and internal is not None:
         internal.active_data_array = str(color_by)
         model.use_internal_color_opacity = True
+
+
+# ---- saving -----------------------------------------------------------------
+
+# Top-level sections of a loaded file the session writes itself, or drops
+# (the animation refers to sinks by id); the others are written back as is.
+SESSION_SECTIONS = {"schemaVersion", "pipeline", "views", "layouts", "animation"}
+# Sink settings merged with what the loaded entry had, keeping its other keys
+NESTED_SINK_KEYS = {"lighting", "cutOut", "exploded"}
+
+SLICE_DIRECTION_IDS = {name: index for index, name in SLICE_DIRECTIONS.items()}
+VOLUME_INTERPOLATION_IDS = {name: index for index, name in VOLUME_INTERPOLATION.items()}
+CAMERA_KEYS = ("position", "focalPoint", "viewUp", "viewAngle", "parallelScale")
+
+
+def index_of(names, name, default: int) -> int:
+    return names.index(name) if name in names else default
+
+
+def floats(values) -> list[float]:
+    return [float(v) for v in values]
+
+
+def plane_points(center, normal, size: float) -> dict:
+    """``origin``, ``point1`` and ``point2`` of a square plane of side
+    ``size`` centered on ``center``, oriented so that ``plane_of_points``
+    gives ``normal`` back; empty for a null normal."""
+    length = math.sqrt(sum(c * c for c in normal))
+    if not length:
+        return {}
+    n = [c / length for c in normal]
+    axis = [0.0, 0.0, 0.0]
+    axis[min(range(3), key=lambda i: abs(n[i]))] = 1.0  # the least aligned
+    u = _normalized(_cross(axis, n))
+    v = _cross(n, u)  # u x v = n
+    origin = [c - (a + b) * size / 2 for c, a, b in zip(center, u, v, strict=True)]
+    return {
+        "origin": origin,
+        "point1": [o + a * size for o, a in zip(origin, u, strict=True)],
+        "point2": [o + b * size for o, b in zip(origin, v, strict=True)],
+    }
+
+
+def _cross(a, b):
+    return [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+
+
+def _normalized(vector):
+    length = math.sqrt(sum(c * c for c in vector))
+    return [c / length for c in vector]
+
+
+def plane_size(model) -> float:
+    """The diagonal of the displayed data, the size of a saved plane."""
+    image = model.source_port.image if model.source_port is not None else None
+    bounds = image.bounds if image is not None else None
+    if not bounds or bounds[1] < bounds[0]:
+        return 1.0
+    return math.dist(bounds[0::2], bounds[1::2]) or 1.0
+
+
+def color_by_entry(model) -> dict:
+    """A contour or threshold colored through its own map: the desktop's
+    "color by" array (see ``apply_sink_settings``)."""
+    array = (
+        model.color_opacity.active_data_array
+        if model.use_internal_color_opacity
+        else ""
+    )
+    return {"colorByArray": bool(array), "colorByArrayName": array or ""}
+
+
+def outline_entry(model) -> dict:
+    return {
+        "gridColor": floats(hex_to_rgb(model.Color)),
+        "gridVisibility": bool(model.ShowGridAxes),
+        "gridLines": bool(model.ShowGrid),
+        "useCustomAxesTitles": bool(model.UseCustomAxesTitles),
+        "customXTitle": model.XTitle,
+        "customYTitle": model.YTitle,
+        "customZTitle": model.ZTitle,
+    }
+
+
+def slice_entry(model) -> dict:
+    entry = {
+        "direction": SLICE_DIRECTION_IDS.get(model.SliceDirection, 0),
+        "slice": int(model.Slice),
+        "interpolate": bool(model.Interpolate),
+        "showArrow": bool(model.ShowArrow),
+        "mapScalars": bool(model.MapScalars),
+        "opacity": float(model.Opacity),
+        "sliceThickness": int(model.SliceThickness),
+        "thickSliceMode": index_of(THICK_SLICE_MODES, model.ThickSliceMode, 2),
+        "planeCenter": floats(model.PlaneCenter),
+        "planeNormal": floats(model.PlaneNormal),
+    }
+    if model.is_custom:  # the desktop places a Custom plane by its points
+        entry.update(
+            plane_points(model.PlaneCenter, model.PlaneNormal, plane_size(model))
+        )
+    return entry
+
+
+def clip_entry(model) -> dict:
+    entry = {
+        "direction": SLICE_DIRECTION_IDS.get(model.SliceDirection, 0),
+        "plane": int(model.Slice),
+        "opacity": float(model.Opacity),
+        "showPlane": bool(model.ShowPlane),
+        "showArrow": bool(model.ShowArrow),
+        "invertPlane": bool(model.InvertPlane),
+        "selectedColor": floats(hex_to_rgb(model.Color)),
+    }
+    # An axis-aligned clip is placed by its direction and index (and flipped
+    # by invertPlane); a Custom normal is already the inverted one.
+    if model.is_custom:
+        entry.update(
+            plane_points(model.PlaneCenter, model.PlaneNormal, plane_size(model))
+        )
+    return entry
+
+
+def volume_entry(model) -> dict:
+    exploded = {
+        key: kind(getattr(model, field)) for key, field, kind in EXPLODED_SETTINGS
+    }
+    exploded["axis"] = index_of(EXPLODED_AXES, model.ExplodedAxis, 2)
+    exploded["direction"] = floats(model.ExplodedDirection)
+    return {
+        "interpolation": VOLUME_INTERPOLATION_IDS.get(model.InterpolationType, 1),
+        "blendingMode": index_of(BLEND_MODES, model.BlendMode, 0),
+        "rayJittering": bool(model.Jittering),
+        "solidity": float(model.Solidity),
+        "labelMapDefaultsApplied": bool(model.label_map_defaults_applied),
+        "lighting": {
+            key: kind(getattr(model, field)) for key, field, kind in LIGHTING_SETTINGS
+        },
+        "cutOut": {
+            "enabled": bool(model.CutOutEnabled),
+            "corner": int(model.CutOutCorner),
+            "position": floats(model.CutOutPosition),
+        },
+        "exploded": exploded,
+    }
+
+
+def label_map_entry(model) -> dict:
+    entry = volume_entry(model)
+    entry.update(
+        {
+            "representation": model.Representation,
+            "surfaceSmoothing": int(model.SurfaceSmoothing),
+            "surfaceOpacity": float(model.SurfaceOpacity),
+            "volumeLookApplied": bool(model.volume_look_applied),
+        }
+    )
+    adopted = model.representation.adopted_labels()
+    if adopted:
+        entry["adoptedLabelMap"] = adopted
+    return entry
+
+
+def contour_entry(model) -> dict:
+    entry = {
+        "opacity": float(model.Opacity),
+        "ambient": float(model.Ambient),
+        "diffuse": float(model.Diffuse),
+        "specular": float(model.Specular),
+        "specularPower": float(model.SpecularPower),
+        "representation": model.Mode,
+        "mapScalars": bool(model.MapScalars),
+        "useSolidColor": bool(model.UseSolidColor),
+        "color": model.Color.lower(),
+        "activeScalars": model.ContourBy or DEFAULT_SCALARS,
+        **color_by_entry(model),
+    }
+    if model.IsoValue is not None:  # None: not placed yet
+        entry["contourValue"] = float(model.IsoValue)
+    return entry
+
+
+def threshold_entry(model) -> dict:
+    entry = {
+        "opacity": float(model.Opacity),
+        "specular": float(model.Specular),
+        "representation": model.Mode,
+        "mapScalars": bool(model.MapScalars),
+        "scalarArray": threshold_array_index(model),
+        **color_by_entry(model),
+    }
+    if model.Minimum is not None and model.Maximum is not None:
+        entry["minimum"] = float(model.Minimum)
+        entry["maximum"] = float(model.Maximum)
+    return entry
+
+
+def threshold_array_index(model) -> int:
+    """The desktop's index of the thresholded array, -1 for the active one.
+    An index from a loaded file stays one until data names it."""
+    by = model.ThresholdBy
+    if isinstance(by, int) and not isinstance(by, bool):
+        return by
+    if not by:
+        return -1
+    names = list(model.ArrayNames)
+    return names.index(by) if by in names else -1
+
+
+def molecule_entry(model) -> dict:
+    return {
+        "ballRadius": float(model.BallRadius),
+        "stickRadius": float(model.StickRadius),
+    }
+
+
+SINK_ENTRIES = {
+    RepresentationType.CLIP: clip_entry,
+    RepresentationType.MOLECULE: molecule_entry,
+    RepresentationType.CONTOUR: contour_entry,
+    RepresentationType.LABEL_MAP: label_map_entry,
+    RepresentationType.THRESHOLD: threshold_entry,
+    RepresentationType.OUTLINE: outline_entry,
+    RepresentationType.SLICE: slice_entry,
+    RepresentationType.VOLUME: volume_entry,
+}
+
+
+def sink_settings(sink: RepresentationSinkNode) -> dict:
+    """The sink's entry besides the graph's keys: the session's values for
+    every key the loader restores, over the loaded entry's other keys."""
+    model = sink.model
+    owned = COMMON_SINK_KEYS | SINK_KEYS.get(sink.representation_type, set())
+    entry = {
+        key: copy.deepcopy(value)
+        for key, value in sink.settings.items()
+        if key not in owned or key in NESTED_SINK_KEYS
+    }
+
+    current = {"visible": bool(model.Visibility)}
+    if model.view is not None and model.view.state_id is not None:
+        current["viewId"] = model.view.state_id
+    if getattr(model, "use_internal_color_opacity", False):
+        current["useDetachedColorMap"] = True
+        current["colorOpacityMap"] = model.color_opacity.to_state()
+    to_entry = SINK_ENTRIES.get(sink.representation_type)
+    if to_entry is not None:
+        current.update(to_entry(model))
+
+    for key, value in current.items():
+        if key in NESTED_SINK_KEYS and isinstance(entry.get(key), dict):
+            entry[key] = {**entry[key], **value}
+        else:
+            entry[key] = value
+    return entry
+
+
+def write_port_metadata(manager: PipelineManager):
+    """Put each data port's color map, displayed array and label table in
+    the library's ``port.metadata``, over what the file had. A map that
+    never saw its data (nothing displayed it) is left out: its points still
+    span the default range, which a saved map would keep on reload."""
+    for model in list(manager.node_models.values()):
+        if not isinstance(model, data_model.DataNodeModel):
+            continue
+        for port_model in model.outputs:
+            port = port_model.port
+            if port is None or isinstance(port, PassthroughOutputPort):
+                continue
+            color_opacity = port_model.color_opacity
+            if color_opacity is not None:
+                if color_opacity.in_data_units:
+                    port.metadata["colorOpacityMap"] = color_opacity.to_state()
+                if color_opacity.active_data_array:
+                    port.metadata["activeScalars"] = color_opacity.active_data_array
+            if port_model.label_table is not None:
+                port.metadata["labelMap"] = port_model.label_table.serialize()
+
+
+def assign_view_ids(manager: PipelineManager) -> dict[str, int]:
+    """Give every view a saved id (a loaded view keeps its file's) and
+    return the panel id -> saved id map."""
+    windows = list(manager.views.values())
+    used = [
+        w.local_state.state_id for w in windows if w.local_state.state_id is not None
+    ]
+    next_id = max(used, default=0) + 1
+    for window in windows:
+        if window.local_state.state_id is None:
+            window.local_state.state_id = next_id
+            next_id += 1
+    return {window.vtk_id: window.local_state.state_id for window in windows}
+
+
+def views_state(manager: PipelineManager, view_ids: dict[str, int]) -> dict:
+    """The ``views`` and ``layouts`` sections, in the desktop's vocabulary
+    (``create_views`` reads them back)."""
+    views = []
+    for window in manager.views.values():
+        view = window.local_state
+        camera = view.vtk_view.camera
+        entry = {
+            "id": view.state_id,
+            "xmlGroup": "views",
+            "xmlName": "RenderView",
+            "servers": VIEW_SERVERS,
+            "useColorPaletteForBackground": 0,
+            "backgroundColor": [floats(view.background)],
+            "camera": {key: camera[key] for key in CAMERA_KEYS},
+            "centerOfRotation": list(camera["focalPoint"]),
+            "isOrthographic": bool(camera["parallelProjection"]),
+            "interactionMode": "3D" if view.interactive_3d else "2D",
+            "orientationAxesVisible": bool(view.orientation_axes_visibility),
+            "centerAxesVisible": bool(view.center_axes_visibility),
+        }
+        if view._id == manager.state.active_view_id:
+            entry["active"] = True
+        views.append(entry)
+
+    sections = {"views": views}
+    layout = layout_entry(
+        manager.dock_layout, view_ids, max(view_ids.values(), default=0) + 1
+    )
+    if layout is not None:
+        sections["layouts"] = [layout]
+    return sections
+
+
+def session_state(manager: PipelineManager, path: Path) -> dict:
+    """The document saving the session to ``path`` (event loop)."""
+    view_ids = assign_view_ids(manager)
+    write_port_metadata(manager)
+    extra = {**manager.state_extras, **views_state(manager, view_ids)}
+    return build_state(manager.pipeline, extra, path.parent)
+
+
+async def save_state_file(manager: PipelineManager, path: str | Path):
+    """Save the session to a ``.tvsm`` or ``.tvh5`` file at ``path``. The
+    document is made on the event loop; the file, with a ``.tvh5``'s
+    payloads, is written in a thread."""
+    path = Path(path)
+    if path.suffix.lower() not in STATE_EXTENSIONS:
+        msg = f"Not a state file: {path.name}"
+        raise ValueError(msg)
+    state = session_state(manager, path)
+    loop = asyncio.get_running_loop()
+    await loop.run_in_executor(None, write_state, path, state, manager.pipeline)

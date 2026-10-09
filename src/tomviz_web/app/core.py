@@ -80,6 +80,16 @@ class Tomviz(TrameApp):
 
             # Dialogs
             ui.FileLoader()
+            self.ctx.state_saver = ui.FileLoader(
+                name="tomviz_save",
+                title="Save State File",
+                confirm="Save",
+                confirm_icon="mdi-content-save-outline",
+                # A full state (with the data) first, as on the desktop
+                extensions=(".tvh5", ".tvsm"),
+                save=True,
+                on_select=self.ctx.pipeline.save_state_file_later,
+            )
             ui.SettingsDialog()
             ui.TransformEditorDialog()
 
@@ -123,6 +133,7 @@ class Tomviz(TrameApp):
                     ctx_name="dock_view",
                     theme=("theme === 'light' ? 'Light' : 'Dark'",),
                     active_panel=(self.ctx.pipeline.activate_panel, "[$event]"),
+                    layout_changed=(self.ctx.pipeline.on_layout_changed, "[$event]"),
                 )
 
         # Add a view if none defined

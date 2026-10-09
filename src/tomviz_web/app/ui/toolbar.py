@@ -46,7 +46,14 @@ class Toolbar(v3.VAppBar):
             ui.toolbar_btn(
                 f"{module.BASENAME}/assets/data/open.svg",
                 v_tooltip_bottom="'Open data file'",
+                disabled=("state_saving",),
                 click="tomviz_file_loader = true",
+            )
+            ui.toolbar_btn(
+                icon="mdi-content-save-outline",
+                v_tooltip_bottom="'Save state'",
+                disabled=("state_saving || pipeline_executing",),
+                click=self.open_save_dialog,
             )
 
             v3.VDivider(vertical=True, classes="mr-2")
@@ -56,6 +63,7 @@ class Toolbar(v3.VAppBar):
             ui.toolbar_btn(
                 icon="mdi-shape-plus-outline",
                 v_tooltip_bottom="'Add transform'",
+                disabled=("state_saving",),
                 click="select_transform = true",
             )
 
@@ -69,7 +77,7 @@ class Toolbar(v3.VAppBar):
                     rep_type.icon,
                     v_tooltip_bottom=f"'{rep_type.label}'",
                     disabled=(
-                        "!active_view_id || !tip_port_id"
+                        "state_saving || !active_view_id || !tip_port_id"
                         f" || !tip_representations.includes('{rep_type.name}')",
                     ),
                     click=(
@@ -94,6 +102,10 @@ class Toolbar(v3.VAppBar):
                 v_tooltip_bottom="'Add View'",
                 click=self.ctx.pipeline.add_view,
             )
+
+    def open_save_dialog(self):
+        """The save dialog, at the state file last loaded or saved."""
+        self.ctx.state_saver.open(self.ctx.pipeline.state_path)
 
     def fake_busy(self):
         time.sleep(2)

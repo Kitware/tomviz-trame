@@ -65,7 +65,7 @@ class PipelineSection(html.Div):
                             nodes=("pipeline.nodes",),
                             active_node=("pipeline.active_node",),
                             tip_port=("tip_port_id",),
-                            locked=("pipeline_executing", False),
+                            locked=("pipeline_executing || state_saving",),
                             dimming=("pipeline_dimming", False),
                             update_active_node="pipeline.active_node = $event",
                             toggle_expanded="$event.expanded = !$event.expanded",
