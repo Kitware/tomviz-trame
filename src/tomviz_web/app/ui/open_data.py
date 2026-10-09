@@ -115,7 +115,11 @@ class FileLoader(v3.VDialog):
     file, and ``extensions`` which files can be chosen. With ``directory``
     it picks a folder instead: only folders are listed, the current path is
     shown, and the confirm button takes the highlighted folder, or the
-    current one when none is.
+    current one when none is. With ``save`` it names a file to write: the
+    folders and the files of the first extension family are listed, a name
+    field and a format (one of ``extensions``, appended unless the name has
+    one) give the target, clicking a file takes its name, and an existing
+    target is announced (the confirm button replaces it).
 
     Each instance keeps its state under its own ``name`` prefix;
     ``{name}_loader`` shows it, and ``open(start)`` shows it at a folder.
@@ -129,11 +133,13 @@ class FileLoader(v3.VDialog):
         confirm_icon="mdi-file-upload-outline",
         extensions=None,
         directory=False,
+        save=False,
         on_select=None,
         **_,
     ):
         self._name = name
         self._directory = directory
+        self._save = save
         self._on_select = on_select or self._open_data
         super().__init__(v_model=(self._key("loader"), False))
 
@@ -146,6 +152,13 @@ class FileLoader(v3.VDialog):
 
         # Initialize file browser (a folder pick starts at home)
         self._file_browser = FileBrowser(current=None if directory else Path.cwd())
+        if save:
+            self.state[self._key("filename")] = ""
+            self.state[self._key("format")] = self._file_ext[0]
+            self.state[self._key("exists")] = False
+            self.state.change(self._key("filename"), self._key("format"))(
+                self._update_target
+            )
 
         # Fill content
         self._update_listing()
@@ -243,20 +256,57 @@ class FileLoader(v3.VDialog):
                                     "{{ new Date(item.modified * 1000).toDateString() }}"
                                 )
 
-            with v3.VCardActions(classes="pt-3"):
-                v3.VBtn(
-                    confirm,
-                    prepend_icon=confirm_icon,
-                    color="primary",
-                    variant="flat",
-                    classes="mr-3 text-none",
-                    # A folder pick falls back to the current folder.
-                    disabled=(self._key("open_disabled"), not directory),
-                    click=(
-                        self.confirm,
-                        f"[{self._key('listing')}[{self._key('active')}]]",
-                    ),
+            if save:
+                with html.Div(classes="d-flex align-center px-4 pt-3"):
+                    v3.VTextField(
+                        v_model=(self._key("filename"),),
+                        label="File name",
+                        hide_details=True,
+                        density="compact",
+                        variant="outlined",
+                        autofocus=True,
+                        __events=[("keydown_enter", "keydown.enter")],
+                        keydown_enter=self.confirm_save,
+                    )
+                    v3.VSelect(
+                        v_model=(self._key("format"),),
+                        items=(self._key("formats"), list(self._file_ext)),
+                        hide_details=True,
+                        density="compact",
+                        variant="outlined",
+                        classes="ml-3",
+                        style="max-width: 9rem;",
+                    )
+                html.Div(
+                    f"{{{{ {self._key('target')} }}}} exists and will be replaced.",
+                    v_if=(self._key("exists"),),
+                    classes="text-caption text-warning px-4 pt-1",
                 )
+            with v3.VCardActions(classes="pt-3"):
+                if save:
+                    v3.VBtn(
+                        text=(f"{self._key('exists')} ? 'Replace' : '{confirm}'",),
+                        prepend_icon=confirm_icon,
+                        color="primary",
+                        variant="flat",
+                        classes="mr-3 text-none",
+                        disabled=(f"!({self._key('filename')} || '').trim()",),
+                        click=self.confirm_save,
+                    )
+                else:
+                    v3.VBtn(
+                        confirm,
+                        prepend_icon=confirm_icon,
+                        color="primary",
+                        variant="flat",
+                        classes="mr-3 text-none",
+                        # A folder pick falls back to the current folder.
+                        disabled=(self._key("open_disabled"), not directory),
+                        click=(
+                            self.confirm,
+                            f"[{self._key('listing')}[{self._key('active')}]]",
+                        ),
+                    )
                 v3.VBtn(
                     "Cancel",
                     classes="text-none",
@@ -281,17 +331,32 @@ class FileLoader(v3.VDialog):
                 {**e, "index": i}
                 for i, e in enumerate(e for e in listing if to_type(e) == "directory")
             ]
+        elif self._save:
+            listing = [
+                {**e, "index": i}
+                for i, e in enumerate(
+                    e
+                    for e in listing
+                    if to_type(e) == "directory" or to_suffix(e) in self._file_ext
+                )
+            ]
         self.state[self._key("active")] = -1
         self.state[self._key("open_disabled")] = not self._directory
         self.state[self._key("listing")] = listing
         self.state[self._key("path")] = str(self._file_browser.current_path)
+        if self._save:
+            self._update_target()
 
     def open(self, start=None):
         """Show the dialog, in the folder ``start`` when it is one (the
-        folder holding it when it is a file)."""
+        folder holding it when it is a file, whose name a save dialog
+        proposes)."""
         if start:
             path = Path(start).expanduser()
-            if path.is_file():
+            if self._save and path.suffix.lower() in self._file_ext:
+                self.state[self._key("filename")] = path.stem
+                self.state[self._key("format")] = path.suffix.lower()
+            if path.is_file() or not path.exists():
                 path = path.parent
             if path.is_dir():
                 self._file_browser.goto(path)
@@ -311,6 +376,10 @@ class FileLoader(v3.VDialog):
         self.state[self._key("active")] = entry.get("index", 0) if entry else -1
         if self._directory:
             return
+        if self._save:
+            if entry and to_type(entry) == "file":
+                self._take_name(entry)
+            return
 
         # Update button state
         self.state[self._key("open_disabled")] = not (
@@ -323,6 +392,9 @@ class FileLoader(v3.VDialog):
         if to_type(entry) == "directory":
             self._file_browser.open_entry(entry)
             self._update_listing()
+        elif self._save:
+            self._take_name(entry)
+            self.confirm_save()
         elif not self._directory:
             self.confirm(entry)
 
@@ -341,6 +413,35 @@ class FileLoader(v3.VDialog):
             return
         self.state[self._key("loader")] = False
         self._on_select(path)
+
+    # ---- save mode -----------------------------------------------------------
+
+    def _take_name(self, entry):
+        path = Path(entry.get("name", ""))
+        self.state[self._key("filename")] = path.stem
+        self.state[self._key("format")] = path.suffix.lower()
+
+    def target(self) -> Path | None:
+        """The file a save dialog names: the name in the current folder,
+        with the chosen format unless the name carries one."""
+        name = (self.state[self._key("filename")] or "").strip()
+        if not name:
+            return None
+        if Path(name).suffix.lower() not in self._file_ext:
+            name += self.state[self._key("format")] or self._file_ext[0]
+        return self._file_browser.current_path / name
+
+    def _update_target(self, **_):
+        target = self.target()
+        self.state[self._key("target")] = target.name if target else ""
+        self.state[self._key("exists")] = bool(target and target.exists())
+
+    def confirm_save(self):
+        target = self.target()
+        if target is None or target.is_dir():
+            return
+        self.state[self._key("loader")] = False
+        self._on_select(target)
 
     def _open_data(self, file_to_load):
         if self.ctx.pipeline.is_state_file(file_to_load):

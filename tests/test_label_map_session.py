@@ -236,12 +236,12 @@ async def run_session(path):
         assert port.label_table.labels[1]["color"] == "#ff0000"
         assert lut_color(shared, 1) == "#ff0000"
 
-        # a table saved on the port (a state file's metadata) is taken, and
-        # reconciled with the data once described (as a .tvh5 load does)
+        # a table saved on the port (a state file's metadata, which the
+        # library loads onto the port) is taken, and reconciled with the
+        # data once described (as a .tvh5 load does)
         saved = {"labels": [{"value": 1, "name": "grain", "color": [0, 0, 1]}]}
-        state_module.apply_port_metadata(
-            transform, {"outputPorts": {port.name: {"metadata": {"labelMap": saved}}}}
-        )
+        port.port.metadata = {"labelMap": saved}
+        state_module.apply_port_metadata(transform)
         assert [e["value"] for e in port.label_table.labels] == [1.0]
         manager.describe_ports(transform)
         assert [e["value"] for e in port.label_table.labels] == [0.0, 1.0]

@@ -251,6 +251,17 @@ class ColorOpacityModel(StateDataModel):
         self._update_lut()
         self._update_pwf()
 
+    @property
+    def in_data_units(self) -> bool:
+        """Whether the points are placed on the data: fitted to its
+        statistics, loaded from a state file or showing labels. Until then
+        they span a default range that a saved map would keep on reload."""
+        return (
+            self._applied is not None
+            or self._preserve_range
+            or self.label_range is not None
+        )
+
     def to_state(self) -> dict:
         """The map in the state-file vocabulary (see ``load_map``)."""
         return {

@@ -1,4 +1,6 @@
 import json
+import math
+from types import SimpleNamespace
 
 import pytest
 from tomviz_pipeline import SinkGroupNode, SinkNode
@@ -353,3 +355,209 @@ def test_unrestored_settings_report_only_what_the_loader_skips():
         "activeScalars",
         "lighting.glow",
     ]
+
+
+# ---- saving -----------------------------------------------------------------
+
+
+VOLUME_ENTRY = {
+    "interpolation": 0,
+    "blendingMode": 3,
+    "rayJittering": False,
+    "solidity": 0.5,
+    "labelMapDefaultsApplied": False,
+    "lighting": {
+        "enabled": True,
+        "ambient": 0.2,
+        "diffuse": 0.7,
+        "specular": 0.1,
+        "specularPower": 20.0,
+        "scattering": 1.5,
+        "shadowsEnabled": False,
+        "shadowReach": 0.4,
+        "anisotropy": -0.5,
+        "smoothNormals": True,
+    },
+    "cutOut": {"enabled": True, "corner": 5, "position": [0.2, 0.4, 0.6]},
+    "exploded": {
+        "enabled": False,
+        "axis": 3,
+        "direction": [0.0, 1.0, 1.0],
+        "showArrow": False,
+        "chunks": 6,
+        "gap": 0.5,
+        "offset": -2,
+    },
+}
+
+
+def model_of(settings: dict, **fields):
+    """A stand-in sink model holding what a loader produced."""
+    model = SimpleNamespace(**settings, **fields)
+    if hasattr(model, "SliceDirection"):
+        model.is_custom = model.SliceDirection == "Custom"
+    return model
+
+
+def round_trip(load, save, entry: dict, **fields) -> dict:
+    """``entry`` through the loader into a model, then out of the saver,
+    restricted to the keys the entry had."""
+    saved = save(model_of(load(entry), **fields))
+    return {key: saved[key] for key in entry}
+
+
+def test_plane_points_give_the_plane_back():
+    for normal in ((0, 0, 1), (0, 0, -3), (1, 0, 0), (0, -1, 0), (1, 2, -2)):
+        points = state.plane_points((1.0, 2.0, 3.0), normal, 4.0)
+        center, saved_normal = state.plane_of_points(points)
+        assert center == pytest.approx((1.0, 2.0, 3.0))
+        length = math.dist(saved_normal, (0, 0, 0))
+        scale = math.dist(normal, (0, 0, 0))
+        assert [c / length for c in saved_normal] == pytest.approx(
+            [c / scale for c in normal]
+        )
+        assert length == pytest.approx(16.0)  # the square's area
+    assert state.plane_points((0, 0, 0), (0, 0, 0), 1.0) == {}
+
+
+def test_saved_sink_entries_are_the_desktop_ones():
+    outline = {
+        "gridColor": [1.0, 0.0, 0.0],
+        "gridVisibility": True,
+        "gridLines": False,
+        "useCustomAxesTitles": True,
+        "customXTitle": "Width",
+        "customYTitle": "Y",
+        "customZTitle": "Depth",
+    }
+    assert round_trip(state.outline_settings, state.outline_entry, outline) == outline
+
+    slice_entry = {
+        "direction": 2,
+        "slice": 7,
+        "interpolate": True,
+        "showArrow": False,
+        "mapScalars": False,
+        "opacity": 0.5,
+        "sliceThickness": 3,
+        "thickSliceMode": 1,
+        "planeCenter": [1.0, 2.0, 3.0],
+        "planeNormal": [0.0, 1.0, 0.0],
+    }
+    assert (
+        round_trip(
+            state.slice_settings, state.slice_entry, slice_entry, source_port=None
+        )
+        == slice_entry
+    )
+    saved = state.slice_entry(
+        model_of(state.slice_settings(slice_entry), source_port=None)
+    )
+    assert "origin" not in saved  # the desktop places an ortho slice itself
+
+    volume = VOLUME_ENTRY
+    assert round_trip(state.volume_settings, state.volume_entry, volume) == volume
+
+    contour = {
+        "contourValue": 30.0,
+        "opacity": 0.5,
+        "ambient": 0.1,
+        "diffuse": 0.8,
+        "specular": 0.3,
+        "specularPower": 50.0,
+        "representation": "Wireframe",
+        "mapScalars": False,
+        "useSolidColor": True,
+        "color": "#00ff80",
+        "activeScalars": "A",
+        "colorByArray": True,
+        "colorByArrayName": "B",
+    }
+    color_map = SimpleNamespace(active_data_array="B")
+    assert (
+        round_trip(
+            state.contour_settings,
+            state.contour_entry,
+            contour,
+            use_internal_color_opacity=True,
+            color_opacity=color_map,
+        )
+        == contour
+    )
+
+    threshold = {
+        "minimum": 10.0,
+        "maximum": 20.0,
+        "opacity": 0.5,
+        "specular": 0.2,
+        "representation": "Points",
+        "mapScalars": True,
+        "scalarArray": 1,
+        "colorByArray": False,
+        "colorByArrayName": "",
+    }
+    assert (
+        round_trip(
+            state.threshold_settings,
+            state.threshold_entry,
+            threshold,
+            use_internal_color_opacity=False,
+        )
+        == threshold
+    )
+    # Once data named the thresholded array, its index; the active one is -1
+    named = model_of({"ThresholdBy": "B", "ArrayNames": ["A", "B"]})
+    assert state.threshold_array_index(named) == 1
+    assert state.threshold_array_index(model_of({"ThresholdBy": ""})) == -1
+
+    molecule = {"ballRadius": 1.5, "stickRadius": 0.2}
+    assert (
+        round_trip(state.molecule_settings, state.molecule_entry, molecule) == molecule
+    )
+
+
+def test_a_saved_custom_clip_is_the_same_plane():
+    entry = {
+        "direction": 3,
+        "plane": 4,
+        "opacity": 0.25,
+        "showPlane": False,
+        "showArrow": False,
+        "invertPlane": True,
+        "selectedColor": [1.0, 0.0, 0.0],
+        "origin": [0, 10, 5],
+        "point1": [10, 10, 5],
+        "point2": [0, 0, 5],
+    }
+    saved = state.clip_entry(model_of(state.clip_settings(entry), source_port=None))
+    assert {k: saved[k] for k in entry if k not in ("origin", "point1", "point2")} == {
+        k: entry[k] for k in entry if k not in ("origin", "point1", "point2")
+    }
+    center, normal = state.plane_of_points(saved)
+    assert center == pytest.approx((5.0, 5.0, 5.0))
+    assert normal[2] < 0
+    assert normal[:2] == pytest.approx((0.0, 0.0))
+    # an axis-aligned clip saves no corners: the desktop places it itself
+    axis = state.clip_entry(
+        model_of({**state.clip_settings(entry), "SliceDirection": "YZ Plane"})
+    )
+    assert "origin" not in axis
+    assert axis["direction"] == 1
+
+
+def test_a_saved_label_map_keeps_its_surface_and_adopted_table():
+    entry = {
+        **VOLUME_ENTRY,
+        "representation": "Volume",
+        "surfaceSmoothing": 8,
+        "surfaceOpacity": 0.5,
+        "volumeLookApplied": False,
+    }
+    table = {"labels": [{"value": 1, "name": "grain", "color": [0, 0, 1]}]}
+    representation = SimpleNamespace(adopted_labels=lambda: table)
+    model = model_of(state.label_map_settings(entry), representation=representation)
+    saved = state.label_map_entry(model)
+    assert {key: saved[key] for key in entry} == entry
+    assert saved["adoptedLabelMap"] == table
+    representation.adopted_labels = lambda: None
+    assert "adoptedLabelMap" not in state.label_map_entry(model)

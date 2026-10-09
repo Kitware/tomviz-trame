@@ -13,7 +13,11 @@ leaves holding panel ids and sizes in whatever units the grid is given: it
 re-lays the grid out proportionally to its container, so sizes only need to
 be relative. ``dockview_layout`` converts one into the other, flattening
 nested splits of the same direction into one branch since dockview cannot
-nest those."""
+nest those.
+
+``layout_entry`` goes back, for saving: a branch of n children becomes a
+balanced tree of two-way splits, and a group of tabs, which ParaView cannot
+show, is split evenly across the cell it occupies."""
 
 from __future__ import annotations
 
@@ -22,6 +26,11 @@ HORIZONTAL = 2  # split left/right (a vertical line)
 GRID_SIZE = 1000.0  # relative units, see the module docstring
 
 ORIENTATIONS = {VERTICAL: "VERTICAL", HORIZONTAL: "HORIZONTAL"}
+DIRECTIONS = {name: direction for direction, name in ORIENTATIONS.items()}
+
+# ParaView's server flags for the proxies a state file recreates
+VIEW_SERVERS = 21
+LAYOUT_SERVERS = 20
 
 
 def layout_items(entry: dict) -> list[dict]:
@@ -143,3 +152,102 @@ def _strip_orientation(node: dict):
     if node["type"] == "branch":
         for child in node["data"]:
             _strip_orientation(child)
+
+
+# ---- saving ------------------------------------------------------------------
+
+
+def layout_entry(
+    layout: dict | None, view_ids: dict[str, int], layout_id: int
+) -> dict | None:
+    """The state-file ``layouts`` entry arranging the views like the
+    dockview ``layout`` (what dockview's ``layout_changed`` reports; None
+    when none was), or None without views. ``view_ids`` maps each panel id
+    to its saved view id. Views the layout's grid does not hold (none was
+    reported yet, a floating group) go side by side on the right, one share
+    each."""
+    if not view_ids:
+        return None
+    placed: list[int] = []
+    grid = (layout or {}).get("grid") or {}
+    root = None
+    if grid.get("root"):
+        root = _tree(
+            grid["root"], grid.get("orientation", "HORIZONTAL"), view_ids, placed
+        )
+    shares = [(root, float(len(placed)))] if root is not None else []
+    shares += [(("cell", v), 1.0) for v in view_ids.values() if v not in placed]
+    return {
+        "id": layout_id,
+        "xmlGroup": "misc",
+        "xmlName": "ViewLayout",
+        "servers": LAYOUT_SERVERS,
+        "items": [_items(_balanced(shares, HORIZONTAL))],
+    }
+
+
+def _flip(orientation: str) -> str:
+    return "VERTICAL" if orientation == "HORIZONTAL" else "HORIZONTAL"
+
+
+def _tree(node: dict, orientation: str, view_ids: dict[str, int], placed: list):
+    """A dockview node as a split tree: ``("cell", view_id)`` or ``("split",
+    direction, fraction, first, second)``; None when it holds no view.
+    ``orientation`` is the node's own, should it be a branch."""
+    if node.get("type") == "leaf":
+        panel_ids = (node.get("data") or {}).get("views") or []
+        cells = [view_ids[p] for p in panel_ids if p in view_ids]
+        placed.extend(cells)
+        if not cells:
+            return None
+        # Tabs: the views share the group's cell.
+        return _balanced([(("cell", v), 1.0) for v in cells], DIRECTIONS[orientation])
+
+    children = []
+    for child in node.get("data") or []:
+        tree = _tree(child, _flip(orientation), view_ids, placed)
+        if tree is not None:
+            children.append((tree, float(child.get("size") or 0.0)))
+    if not children:
+        return None
+    return _balanced(children, DIRECTIONS[orientation])
+
+
+def _balanced(shares: list[tuple], direction: int):
+    """Split ``(tree, share)`` pairs in ``direction``, halving the list at
+    each level so the tree, and ParaView's flat list of it, stay shallow."""
+    if len(shares) == 1:
+        return shares[0][0]
+    middle = len(shares) // 2
+    first, second = shares[:middle], shares[middle:]
+    total = sum(share for _, share in shares)
+    if total > 0:
+        fraction = sum(share for _, share in first) / total
+    else:
+        fraction = len(first) / len(shares)
+    return (
+        "split",
+        direction,
+        fraction,
+        _balanced(first, direction),
+        _balanced(second, direction),
+    )
+
+
+def _items(tree) -> list[dict]:
+    """A split tree as ParaView's flat list: item ``i``'s children at
+    ``2i + 1`` and ``2i + 2``, the unused slots empty cells."""
+    cells: dict[int, dict] = {}
+
+    def place(node, index: int):
+        if node[0] == "cell":
+            cells[index] = {"direction": 0, "fraction": 0.5, "viewId": node[1]}
+            return
+        _, direction, fraction, first, second = node
+        cells[index] = {"direction": direction, "fraction": fraction, "viewId": 0}
+        place(first, 2 * index + 1)
+        place(second, 2 * index + 2)
+
+    place(tree, 0)
+    empty = {"direction": 0, "fraction": 0.5, "viewId": 0}
+    return [cells.get(i, dict(empty)) for i in range(max(cells) + 1)]

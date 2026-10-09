@@ -51,11 +51,7 @@ class ReaderSourceNode(_ReaderSourceNode):
         directory (stamped on the node by the library's loader)."""
         if not self.file_names:
             return None
-        path = Path(self.file_names[0])
-        state_dir = getattr(self, "_state_dir", None)
-        if not path.is_absolute() and state_dir is not None:
-            path = (Path(state_dir) / path).resolve()
-        return path
+        return self.resolve_path(self.file_names[0])
 
     def execute(self) -> bool:
         file_path = self.file_path

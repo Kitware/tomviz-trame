@@ -1,9 +1,13 @@
-"""The desktop's view layout tree turned into a dockview layout."""
+"""The desktop's view layout tree turned into a dockview layout, and back."""
+
+import pytest
 
 from tomviz_web.app.pipeline.layout import (
     HORIZONTAL,
+    LAYOUT_SERVERS,
     VERTICAL,
     dockview_layout,
+    layout_entry,
     layout_view_ids,
 )
 
@@ -118,3 +122,127 @@ def test_layouts_that_do_not_match_the_views_are_refused():
     assert dockview_layout(entry, panels(1, 2, 3)) is None  # a view without a cell
     assert dockview_layout({"items": [[]]}, panels(1)) is None
     assert layout_view_ids(entry) == [1, 2]
+
+
+# ---- saving ------------------------------------------------------------------
+
+
+def view_ids(*ids):
+    """panel id -> saved view id, as the manager builds it."""
+    return {f"panel{v}": v for v in ids}
+
+
+def round_trip(entry, *ids):
+    """The desktop entry through dockview and back."""
+    return layout_entry(dockview_layout(entry, panels(*ids)), view_ids(*ids), 99)
+
+
+def test_a_saved_layout_is_the_desktop_one():
+    entry = {"items": [[split(HORIZONTAL, 0.4), cell(1), cell(2)]]}
+    saved = round_trip(entry, 1, 2)
+    assert saved["items"] == entry["items"]
+    assert (saved["id"], saved["xmlGroup"], saved["xmlName"]) == (
+        99,
+        "misc",
+        "ViewLayout",
+    )
+    assert saved["servers"] == LAYOUT_SERVERS
+    assert round_trip({"items": [[cell(7)]]}, 7)["items"] == [[cell(7)]]
+
+
+def test_nested_layouts_survive_a_round_trip():
+    entry = {
+        "items": [
+            [
+                split(VERTICAL, 0.5),
+                cell(1),
+                split(HORIZONTAL, 0.5),
+                None,
+                None,
+                cell(2),
+                split(VERTICAL, 0.5),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                cell(3),
+                cell(4),
+            ]
+        ]
+    }
+    first = dockview_layout(entry, panels(1, 2, 3, 4))
+    saved = layout_entry(first, view_ids(1, 2, 3, 4), 99)
+    again = dockview_layout(saved, panels(1, 2, 3, 4))
+    assert again["grid"] == first["grid"]
+
+
+def test_branches_of_many_views_split_in_halves():
+    # Four views side by side, 10/20/30/40: two levels, not a chain of three
+    layout = {
+        "grid": {
+            "orientation": "HORIZONTAL",
+            "root": {
+                "type": "branch",
+                "data": [
+                    {"type": "leaf", "data": {"views": [f"panel{v}"]}, "size": s}
+                    for v, s in ((1, 10), (2, 20), (3, 30), (4, 40))
+                ],
+            },
+        }
+    }
+    items = layout_entry(layout, view_ids(1, 2, 3, 4), 99)["items"][0]
+    assert items == [
+        split(HORIZONTAL, 0.3),
+        split(HORIZONTAL, 1 / 3),
+        split(HORIZONTAL, 3 / 7),
+        cell(1),
+        cell(2),
+        cell(3),
+        cell(4),
+    ]
+    again = dockview_layout({"items": [items]}, panels(1, 2, 3, 4))
+    names, sizes = zip(*leaves(again["grid"]["root"]), strict=True)
+    assert names == ("panel1", "panel2", "panel3", "panel4")
+    assert sizes == pytest.approx((100.0, 200.0, 300.0, 400.0))
+
+
+def test_tabs_share_their_cell():
+    # Two tabs in the right group of a left/right split: split top/bottom
+    layout = {
+        "grid": {
+            "orientation": "HORIZONTAL",
+            "root": {
+                "type": "branch",
+                "data": [
+                    {"type": "leaf", "data": {"views": ["panel1"]}, "size": 1},
+                    {
+                        "type": "leaf",
+                        "data": {"views": ["panel2", "panel3"]},
+                        "size": 1,
+                    },
+                ],
+            },
+        }
+    }
+    items = layout_entry(layout, view_ids(1, 2, 3), 99)["items"][0]
+    assert items[:3] == [split(HORIZONTAL, 0.5), cell(1), split(VERTICAL, 0.5)]
+    assert items[5:] == [cell(2), cell(3)]
+
+
+def test_views_the_layout_misses_go_on_the_right():
+    entry = {"items": [[split(VERTICAL, 0.5), cell(1), cell(2)]]}
+    layout = dockview_layout(entry, panels(1, 2))
+    # A third view the dock has not reported, and a stale panel
+    layout["grid"]["root"]["data"].append(
+        {"type": "leaf", "data": {"views": ["gone"]}, "size": 500}
+    )
+    items = layout_entry(layout, view_ids(1, 2, 3), 99)["items"][0]
+    assert items[:3] == [split(HORIZONTAL, 2 / 3), split(VERTICAL, 0.5), cell(3)]
+    assert items[3:] == [cell(1), cell(2)]
+
+    # Nothing reported yet: side by side
+    items = layout_entry(None, view_ids(1, 2), 99)["items"][0]
+    assert items == [split(HORIZONTAL, 0.5), cell(1), cell(2)]
+    assert layout_entry(None, {}, 99) is None

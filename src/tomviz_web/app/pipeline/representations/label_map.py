@@ -310,6 +310,13 @@ class LabelMapRepresentation(VolumeRepresentation):
         else:
             self._restored_adopted = table
 
+    def adopted_labels(self) -> dict | None:
+        """The adopted table to save: the sink's own, or a restored one no
+        data has claimed yet (the desktop keeps it for when one does)."""
+        if self.adopted_table is not None:
+            return self.adopted_table.serialize()
+        return self._restored_adopted
+
     def _apply_volume_look(self):
         """The ambient floor, once, so the user's own lighting survives
         later executions; through the model, which pushes right after."""

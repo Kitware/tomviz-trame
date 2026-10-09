@@ -19,7 +19,9 @@ class ViewModel(StateDataModel):
 
     ``camera_initialized`` records whether the camera has been placed, by
     the first data that arrived (sinks reset the camera once) or by a
-    loaded state; sinks leave a placed camera alone.
+    loaded state; sinks leave a placed camera alone. ``state_id`` is the
+    view's id in state files: the loaded file's, else given at the first
+    save, so the sinks saved with the view keep naming it.
     """
 
     color = Sync(str)
@@ -33,6 +35,7 @@ class ViewModel(StateDataModel):
 
     def __init__(self, server, **kwargs):
         self.camera_initialized = False
+        self.state_id: int | None = None
         self._render_pending = False
         super().__init__(server, **kwargs)
 
